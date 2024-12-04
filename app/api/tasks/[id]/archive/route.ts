@@ -11,6 +11,18 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { data: userTenant, error: userTenantError } = await supabase
+      .from('user_tenants')
+      .select('tenant_id')
+      .eq('user_id', session.user.id)
+      .single()
+
+    if (userTenantError || !userTenant) {
+      console.error('User tenant lookup error:', userTenantError)
+      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+    }
+
+    const tenantId = userTenant.tenant_id
     const taskId = parseInt(params.id, 10)
     if (isNaN(taskId)) {
       return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 })
@@ -22,6 +34,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       .from('tasks')
       .update({ archived })
       .eq('id', taskId)
+      .eq('tenant_id', tenantId)
       .select('*, comments(*)')
       .single()
 
@@ -35,4 +48,4 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     console.error('Error updating task:', error)
     return NextResponse.json({ error: 'An error occurred while updating the task' }, { status: 500 })
   }
-} 
+}

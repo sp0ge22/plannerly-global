@@ -1,4 +1,3 @@
-// app/api/tasks/[id]/route.ts
 import { NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
@@ -12,6 +11,18 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { data: userTenant, error: userTenantError } = await supabase
+      .from('user_tenants')
+      .select('tenant_id')
+      .eq('user_id', session.user.id)
+      .single()
+
+    if (userTenantError || !userTenant) {
+      console.error('User tenant lookup error:', userTenantError)
+      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+    }
+
+    const tenantId = userTenant.tenant_id
     const taskId = parseInt(params.id, 10)
     if (isNaN(taskId)) {
       return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 })
@@ -19,7 +30,6 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     const updatedTask = await request.json()
 
-    // Map frontend status values to database values if needed
     const statusMap: { [key: string]: string } = {
       'To Do': 'To Do',
       'In Progress': 'In Progress',
@@ -27,7 +37,6 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       'Done': 'Done'
     }
 
-    // Prepare the update object with only the fields that exist in the database
     const updateData = {
       title: updatedTask.title,
       body: updatedTask.body,
@@ -38,11 +47,12 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       updated_at: new Date().toISOString()
     }
 
+    // Ensure we're only updating tasks in the user's tenant
     const { data, error } = await supabase
       .from('tasks')
       .update(updateData)
       .eq('id', taskId)
-      // Remove the user_id check since these are public tasks
+      .eq('tenant_id', tenantId)
       .select('*, comments(*)')
       .single()
 
@@ -67,6 +77,18 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { data: userTenant, error: userTenantError } = await supabase
+      .from('user_tenants')
+      .select('tenant_id')
+      .eq('user_id', session.user.id)
+      .single()
+
+    if (userTenantError || !userTenant) {
+      console.error('User tenant lookup error:', userTenantError)
+      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+    }
+
+    const tenantId = userTenant.tenant_id
     const taskId = parseInt(params.id, 10)
     if (isNaN(taskId)) {
       return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 })
@@ -77,11 +99,11 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       return NextResponse.json({ error: 'Invalid PIN' }, { status: 403 })
     }
 
-    // RLS policies will handle the permission check
     const { error } = await supabase
       .from('tasks')
       .delete()
       .eq('id', taskId)
+      .eq('tenant_id', tenantId)
 
     if (error) {
       console.error('Error deleting task:', error)

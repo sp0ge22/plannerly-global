@@ -1,4 +1,3 @@
-// app/api/tasks/route.ts
 import { NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
@@ -12,6 +11,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { data: userTenant, error: userTenantError } = await supabase
+      .from('user_tenants')
+      .select('tenant_id')
+      .eq('user_id', session.user.id)
+      .single()
+
+    if (userTenantError || !userTenant) {
+      console.error('User tenant lookup error:', userTenantError)
+      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+    }
+
+    const tenantId = userTenant.tenant_id
     const task = await request.json()
     console.log('Received task:', task)
 
@@ -23,10 +34,11 @@ export async function POST(request: Request) {
       .from('tasks')
       .insert([{ 
         ...task,
+        tenant_id: tenantId,
         status: task.status || 'To Do', 
         assignee: task.assignee || 'Unassigned',
         due: task.due || null,
-        user_id: session.user.id // Add user_id
+        user_id: session.user.id
       }])
       .select()
 
@@ -51,6 +63,19 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { data: userTenant, error: userTenantError } = await supabase
+      .from('user_tenants')
+      .select('tenant_id')
+      .eq('user_id', session.user.id)
+      .single()
+
+    if (userTenantError || !userTenant) {
+      console.error('User tenant lookup error:', userTenantError)
+      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+    }
+
+    const tenantId = userTenant.tenant_id
+
     // Get user's profile to check if admin
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -63,7 +88,6 @@ export async function GET() {
       return NextResponse.json({ error: 'User not allowed' }, { status: 403 })
     }
 
-    // Debug log
     console.log('User profile:', profile)
 
     // Get user's permissions
@@ -77,26 +101,20 @@ export async function GET() {
       return NextResponse.json({ error: permissionsError.message }, { status: 500 })
     }
 
-    // Debug log
     console.log('User permissions:', permissions)
 
-    // Get user's email from session
-    const userEmail = session.user.email
-
-    // Debug log
-    console.log('User email:', userEmail)
-
-    // Build query based on permissions
-    let query = supabase.from('tasks').select('*')
+    let query = supabase.from('tasks').select('*').eq('tenant_id', tenantId)
 
     if (!profile?.is_admin) {
-      const allowedAssignees = [
-        ...(permissions?.map(p => p.assignee) || []),
-        userEmail
-      ]
-      // Debug log
-      console.log('Allowed assignees:', allowedAssignees)
-      query = query.in('assignee', allowedAssignees)
+      const allowedAssignees = permissions?.map(p => p.assignee) || []
+      
+      // Only apply filtering if there are explicit permissions set
+      if (allowedAssignees.length > 0) {
+        console.log('Restricting by allowed assignees:', allowedAssignees)
+        query = query.in('assignee', allowedAssignees)
+      } else {
+        console.log('No explicit permissions, showing all tenant tasks.')
+      }
     }
 
     const { data: tasks, error: tasksError } = await query.order('created_at', { ascending: false })
@@ -106,10 +124,11 @@ export async function GET() {
       return NextResponse.json({ error: tasksError.message }, { status: 500 })
     }
 
-    // Debug log
     console.log('Tasks found:', tasks?.length)
 
-    // Get comments for allowed tasks
+    // Fetch comments for the retrieved tasks
+    // Since we rely on tasks for tenant filtering,
+    // we don't need tenant_id on comments.
     const { data: comments, error: commentsError } = await supabase
       .from('comments')
       .select('*')
