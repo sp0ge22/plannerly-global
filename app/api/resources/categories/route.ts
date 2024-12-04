@@ -7,19 +7,34 @@ export async function POST(request: Request) {
 
   try {
     // Check authentication
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const { data: { session }, error: authError } = await supabase.auth.getSession()
+    if (authError || !session) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
+
+    // Get tenant_id
+    const { data: userTenant, error: userTenantError } = await supabase
+      .from('user_tenants')
+      .select('tenant_id')
+      .eq('user_id', session.user.id)
+      .single()
+
+    if (userTenantError || !userTenant) {
+      console.error('User tenant lookup error:', userTenantError)
+      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+    }
+
+    const tenantId = userTenant.tenant_id
 
     const { name } = await request.json()
     console.log('Attempting to create category with name:', name)
 
-    // First, check if category already exists
+    // Check if category already exists within this tenant
     const { data: existingCategory, error: checkError } = await supabase
       .from('resource_categories')
       .select('*')
       .eq('name', name)
+      .eq('tenant_id', tenantId)
       .maybeSingle()
 
     if (checkError) {
@@ -32,10 +47,10 @@ export async function POST(request: Request) {
       return NextResponse.json(existingCategory)
     }
 
-    // Create new category
+    // Create new category for this tenant
     const { data: newCategory, error: insertError } = await supabase
       .from('resource_categories')
-      .insert([{ name }])
+      .insert([{ name, tenant_id: tenantId }])
       .select('*')
       .single()
 
@@ -65,14 +80,29 @@ export async function GET() {
   const supabase = createRouteHandlerClient({ cookies })
 
   try {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const { data: { session }, error: authError } = await supabase.auth.getSession()
+    if (authError || !session) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
+
+    // Get tenant_id
+    const { data: userTenant, error: userTenantError } = await supabase
+      .from('user_tenants')
+      .select('tenant_id')
+      .eq('user_id', session.user.id)
+      .single()
+
+    if (userTenantError || !userTenant) {
+      console.error('User tenant lookup error:', userTenantError)
+      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+    }
+
+    const tenantId = userTenant.tenant_id
 
     const { data, error } = await supabase
       .from('resource_categories')
       .select('*')
+      .eq('tenant_id', tenantId)
       .order('name', { ascending: true })
 
     if (error) throw error
@@ -82,4 +112,4 @@ export async function GET() {
     console.error('Error fetching categories:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
-} 
+}
