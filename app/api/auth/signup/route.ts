@@ -22,7 +22,7 @@ const serviceRoleClient = createClient(
 
 export async function POST(request: Request) {
   try {
-    const { email, password, accessKey } = await request.json()
+    const { email, password, accessKey, organizationName } = await request.json()
 
     console.log('Received request for signup with:', { email, accessKey })
 
@@ -82,10 +82,11 @@ export async function POST(request: Request) {
     console.log('Profile insert:', { profileData, profileError })
     if (profileError) throw profileError
 
-    // Create a tenant for the new user
+    // Create a tenant for the new user with the provided organization name
+    const tenantName = organizationName?.trim() || `${email.toLowerCase()}'s Organization`
     const { data: tenantData, error: tenantError } = await serviceRoleClient
       .from('tenants')
-      .insert([{ name: `${email.toLowerCase()}'s Tenant` }])
+      .insert([{ name: tenantName }])
       .select('id')
       .single()
 
@@ -93,12 +94,13 @@ export async function POST(request: Request) {
     if (tenantError) throw tenantError
     if (!tenantData?.id) throw new Error('Tenant creation returned no ID.')
 
-    // Link user to tenant
+    // Link user to tenant as owner
     const { data: userTenantData, error: userTenantError } = await serviceRoleClient
       .from('user_tenants')
       .insert([{
         user_id: userId,
-        tenant_id: tenantData.id
+        tenant_id: tenantData.id,
+        is_owner: true
       }])
       .select('*')
 

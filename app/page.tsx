@@ -3,9 +3,12 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Icons } from "@/components/ui/icons"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
@@ -20,7 +23,10 @@ export default function LandingPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [name, setName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
   
   const router = useRouter()
   const supabase = createClientComponentClient()
@@ -87,6 +93,9 @@ export default function LandingPage() {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            name: name,
+          }
         }
       })
 
@@ -96,14 +105,13 @@ export default function LandingPage() {
       if (authData.user) {
         const { error: profileError } = await supabase
           .from('profiles')
-          .insert([{
+          .upsert({
             id: authData.user.id,
             email: email.toLowerCase(),
-            avatar_color: 'bg-red-600',
-            avatar_letter: 'U',
+            name: name,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          }])
+          })
 
         if (profileError) throw profileError
       }
@@ -130,182 +138,341 @@ export default function LandingPage() {
     switch (mode) {
       case 'verify':
         return (
-          <div className="text-center space-y-4">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-500" />
-            <h2 className="text-2xl font-bold text-white">Check your email</h2>
-            <p className="text-neutral-400 max-w-sm">
-              We sent you a verification link to {email}. Click the link in your email to verify your account.
-            </p>
-            <Button 
-              variant="ghost" 
-              className="text-neutral-400 hover:text-white"
-              onClick={() => setMode('login')}
-            >
-              Back to login
-            </Button>
-          </div>
+          <Card className="w-full max-w-md">
+            <CardContent className="pt-6 text-center space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+              <h2 className="text-2xl font-bold">Check your email</h2>
+              <p className="text-muted-foreground max-w-sm mx-auto">
+                We sent you a verification link to {email}. Click the link in your email to verify your account.
+              </p>
+              <Button 
+                variant="ghost" 
+                className="mt-4"
+                onClick={() => setMode('login')}
+              >
+                Back to login
+              </Button>
+            </CardContent>
+          </Card>
         )
 
       case 'login':
         return (
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-neutral-200">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="bg-neutral-800/50 border-neutral-700 text-white"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-neutral-200">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="bg-neutral-800/50 border-neutral-700 text-white"
-              />
-            </div>
-            <Button 
-              type="submit" 
-              className="w-full bg-blue-500 hover:bg-blue-600"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : 'Sign in'}
-            </Button>
-          </form>
+          <Card className="w-full max-w-md">
+            <CardHeader className="space-y-1">
+              <div className="flex items-center justify-center space-x-2">
+                <Icons.logo className="h-8 w-8 text-primary" />
+                <CardTitle className="text-3xl font-bold">Plannerly</CardTitle>
+              </div>
+              <p className="text-sm text-center text-muted-foreground">
+                Sign in to your Plannerly account
+              </p>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <form onSubmit={handleLogin}>
+                <div className="grid gap-2">
+                  <Input
+                    id="email"
+                    placeholder="name@example.com"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    autoCorrect="off"
+                    required
+                  />
+                  <Input
+                    id="password"
+                    placeholder="Password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <Button className="w-full" type="submit" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : 'Sign in'}
+                  </Button>
+                </div>
+              </form>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+              <Button variant="outline" className="w-full">
+                <Icons.google className="mr-2 h-4 w-4" />
+                Sign in with Google
+              </Button>
+            </CardContent>
+            <CardFooter className="flex flex-col space-y-4">
+              <div className="relative w-full">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Need an account?
+                  </span>
+                </div>
+              </div>
+              <Button className="w-full" variant="outline" onClick={() => setMode('signup')}>
+                Sign up
+              </Button>
+            </CardFooter>
+          </Card>
         )
 
       case 'signup':
         return (
-          <form onSubmit={handleSignUp} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-neutral-200">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="bg-neutral-800/50 border-neutral-700 text-white"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-neutral-200">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="At least 8 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                className="bg-neutral-800/50 border-neutral-700 text-white"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-neutral-200">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Re-enter your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                className="bg-neutral-800/50 border-neutral-700 text-white"
-              />
-            </div>
-            <Button 
-              type="submit" 
-              className="w-full bg-blue-500 hover:bg-blue-600"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
-                </>
-              ) : 'Create account'}
-            </Button>
-          </form>
+          <Card className="w-full max-w-md">
+            <CardHeader className="space-y-1">
+              <div className="flex items-center justify-center space-x-2">
+                <Icons.logo className="h-8 w-8 text-primary" />
+                <CardTitle className="text-3xl font-bold">Plannerly</CardTitle>
+              </div>
+              <p className="text-sm text-center text-muted-foreground">
+                Create your Plannerly account to start managing tasks and resources
+              </p>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <form onSubmit={handleSignUp}>
+                <div className="grid gap-2">
+                  <Input
+                    id="name"
+                    placeholder="Full Name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    autoCapitalize="words"
+                    autoComplete="name"
+                    autoCorrect="off"
+                    required
+                  />
+                  <Input
+                    id="email"
+                    placeholder="name@example.com"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    autoCorrect="off"
+                    required
+                  />
+                  <Input
+                    id="password"
+                    placeholder="Password (min. 8 characters)"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                  />
+                  <Input
+                    id="confirmPassword"
+                    placeholder="Confirm Password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                  <Button className="w-full" type="submit" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating account...
+                      </>
+                    ) : 'Create Account'}
+                  </Button>
+                </div>
+              </form>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+              <Button variant="outline" className="w-full">
+                <Icons.google className="mr-2 h-4 w-4" />
+                Sign Up with Google
+              </Button>
+            </CardContent>
+            <CardFooter className="flex flex-col space-y-4">
+              <div className="flex flex-col space-y-2 text-center text-sm text-muted-foreground">
+                <p>
+                  By creating an account, you agree to our{" "}
+                  <Button
+                    variant="link"
+                    className="h-auto p-0 text-primary"
+                    onClick={() => setShowTerms(true)}
+                  >
+                    Terms of Service
+                  </Button>{" "}
+                  and{" "}
+                  <Button
+                    variant="link"
+                    className="h-auto p-0 text-primary"
+                    onClick={() => setShowPrivacyPolicy(true)}
+                  >
+                    Privacy Policy
+                  </Button>
+                  .
+                </p>
+              </div>
+              <div className="relative w-full">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Already registered?
+                  </span>
+                </div>
+              </div>
+              <Button className="w-full" variant="outline" onClick={() => setMode('login')}>
+                Log In
+              </Button>
+            </CardFooter>
+          </Card>
         )
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-900 via-neutral-900 to-neutral-800">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(59,130,246,0.1),transparent_50%)]" />
-      
-      <div className="relative container mx-auto px-4 py-12 flex flex-col items-center">
-        {/* Header Section */}
-        <div className="w-full max-w-md mb-12 flex flex-col items-center">
-          <div className="relative mb-6">
-            <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full blur opacity-30" />
-            <Image
-              src="https://i.imgur.com/SvnWJ0L.png"
-              alt="Business Dashboard Logo"
-              width={80}
-              height={80}
-              className="relative object-contain rounded-full"
-              priority
-            />
-          </div>
-          
-          <h1 className="text-4xl font-bold text-white text-center mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white to-neutral-400">
-            Business Dashboard
-          </h1>
+    <>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="w-full max-w-[400px] px-4">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={mode}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              {renderForm()}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
 
-          <div className="w-full max-w-xs bg-neutral-800/50 backdrop-blur-sm rounded-lg p-1 mb-8">
-            <div className="relative flex">
-              <motion.div
-                className="absolute inset-0 w-1/2 h-full bg-blue-500 rounded-md"
-                animate={{ x: mode === 'login' ? 0 : '100%' }}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              />
-              <Button
-                variant="ghost"
-                className={`flex-1 relative z-10 ${mode === 'login' ? 'text-white' : 'text-neutral-400'}`}
-                onClick={() => setMode('login')}
-              >
-                Sign in
-              </Button>
-              <Button
-                variant="ghost"
-                className={`flex-1 relative z-10 ${mode === 'signup' ? 'text-white' : 'text-neutral-400'}`}
-                onClick={() => setMode('signup')}
-              >
-                Sign up
-              </Button>
+      {/* Privacy Policy Modal */}
+      <Dialog open={showPrivacyPolicy} onOpenChange={setShowPrivacyPolicy}>
+        <DialogContent className="max-w-[800px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Privacy Policy</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <p className="font-semibold">Last updated: {new Date().toLocaleDateString()}</p>
+            
+            <div className="space-y-4">
+              <section className="space-y-2">
+                <h3 className="text-lg font-semibold">1. Introduction</h3>
+                <p>
+                  Shinespike Limited ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and share your personal information when you use our services.
+                </p>
+              </section>
+
+              <section className="space-y-2">
+                <h3 className="text-lg font-semibold">2. Information We Collect</h3>
+                <p>We collect information that you provide directly to us, including:</p>
+                <ul className="list-disc pl-6 space-y-1">
+                  <li>Name and contact information</li>
+                  <li>Account credentials</li>
+                  <li>Profile information</li>
+                  <li>Communication preferences</li>
+                </ul>
+              </section>
+
+              <section className="space-y-2">
+                <h3 className="text-lg font-semibold">3. How We Use Your Information</h3>
+                <p>We use the information we collect to:</p>
+                <ul className="list-disc pl-6 space-y-1">
+                  <li>Provide and maintain our services</li>
+                  <li>Process your transactions</li>
+                  <li>Send you service-related communications</li>
+                  <li>Improve and optimize our services</li>
+                </ul>
+              </section>
+
+              <section className="space-y-2">
+                <h3 className="text-lg font-semibold">4. Contact Us</h3>
+                <p>
+                  If you have any questions about this Privacy Policy, please contact us at:
+                  <br />
+                  Shinespike Limited
+                  <br />
+                  Email: privacy@shinespike.com
+                </p>
+              </section>
             </div>
           </div>
-        </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* Auth Forms */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={mode}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.2 }}
-            className="w-full max-w-md bg-neutral-800/30 backdrop-blur-sm p-6 rounded-lg shadow-xl border border-neutral-700/50"
-          >
-            {renderForm()}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-    </div>
+      {/* Terms of Service Modal */}
+      <Dialog open={showTerms} onOpenChange={setShowTerms}>
+        <DialogContent className="max-w-[800px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Terms of Service</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <p className="font-semibold">Last updated: {new Date().toLocaleDateString()}</p>
+            
+            <div className="space-y-4">
+              <section className="space-y-2">
+                <h3 className="text-lg font-semibold">1. Acceptance of Terms</h3>
+                <p>
+                  By accessing and using the services provided by Shinespike Limited ("we", "our", or "us"), you agree to be bound by these Terms of Service and all applicable laws and regulations.
+                </p>
+              </section>
+
+              <section className="space-y-2">
+                <h3 className="text-lg font-semibold">2. Use License</h3>
+                <p>
+                  We grant you a limited, non-exclusive, non-transferable license to use our services for your personal or business purposes, subject to these Terms.
+                </p>
+              </section>
+
+              <section className="space-y-2">
+                <h3 className="text-lg font-semibold">3. User Obligations</h3>
+                <ul className="list-disc pl-6 space-y-1">
+                  <li>You must provide accurate information when creating an account</li>
+                  <li>You are responsible for maintaining the security of your account</li>
+                  <li>You agree not to use the service for any illegal purposes</li>
+                  <li>You will not attempt to breach or circumvent any security measures</li>
+                </ul>
+              </section>
+
+              <section className="space-y-2">
+                <h3 className="text-lg font-semibold">4. Contact</h3>
+                <p>
+                  For any questions regarding these Terms, please contact:
+                  <br />
+                  Shinespike Limited
+                  <br />
+                  Email: legal@shinespike.com
+                </p>
+              </section>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

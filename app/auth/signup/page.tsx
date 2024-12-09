@@ -4,17 +4,19 @@
 import { useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Icons } from "@/components/ui/icons"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from 'lucide-react'
-import Link from 'next/link'
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  const [name, setName] = useState('')
+  const [organizationName, setOrganizationName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const supabase = createClientComponentClient()
@@ -25,25 +27,31 @@ export default function SignUpPage() {
     setIsLoading(true)
 
     try {
-      // Check if passwords match
-      if (password !== confirmPassword) {
-        throw new Error('Passwords do not match')
-      }
-
       // Validate password strength
       if (password.length < 8) {
         throw new Error('Password must be at least 8 characters long')
       }
 
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        }
+      // Get the access key from URL if it exists
+      const searchParams = new URLSearchParams(window.location.search)
+      const accessKey = searchParams.get('key')
+
+      // Make API call to signup endpoint
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          accessKey,
+          organizationName: organizationName.trim()
+        }),
       })
 
-      if (error) throw error
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error)
 
       toast({
         title: "Check your email",
@@ -64,77 +72,115 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="w-full">
-      <div className="space-y-2 mb-6">
-        <h2 className="text-2xl font-bold text-white">Create your account</h2>
-        <p className="text-neutral-400">
-          Fill in your details to get started
-        </p>
-      </div>
-      
-      <form onSubmit={handleSignUp} className="space-y-6">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="name@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="bg-neutral-800/50 border-neutral-700"
-            />
+    <div className="container flex h-screen w-screen flex-col items-center justify-center">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <div className="flex items-center justify-center space-x-2">
+            <Icons.logo className="h-8 w-8 text-primary" />
+            <CardTitle className="text-3xl font-bold">Plannerly</CardTitle>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              placeholder="At least 8 characters"
-              className="bg-neutral-800/50 border-neutral-700"
-            />
+          <p className="text-sm text-center text-muted-foreground">
+            Create your Plannerly account to start managing tasks and resources
+          </p>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <form onSubmit={handleSignUp}>
+            <div className="grid gap-2">
+              <Input
+                id="name"
+                placeholder="Full Name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoCapitalize="words"
+                autoComplete="name"
+                autoCorrect="off"
+                required
+              />
+              <Input
+                id="email"
+                placeholder="name@example.com"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoCapitalize="none"
+                autoComplete="email"
+                autoCorrect="off"
+                required
+              />
+              <Input
+                id="organizationName"
+                placeholder="Organization Name"
+                type="text"
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+                required
+              />
+              <Input
+                id="password"
+                placeholder="Password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+              <Button className="w-full" type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating account...
+                  </>
+                ) : (
+                  'Create Account'
+                )}
+              </Button>
+            </div>
+          </form>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or continue with
+              </span>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              placeholder="Re-enter your password"
-              className="bg-neutral-800/50 border-neutral-700"
-            />
+          <Button variant="outline" className="w-full">
+            <Icons.google className="mr-2 h-4 w-4" />
+            Sign Up with Google
+          </Button>
+        </CardContent>
+        <CardFooter className="flex flex-col space-y-4">
+          <div className="flex flex-col space-y-2 text-center text-sm text-muted-foreground">
+            <p>
+              By creating an account, you agree to our{" "}
+              <Link href="/terms" className="hover:text-primary underline underline-offset-4">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="hover:text-primary underline underline-offset-4">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </div>
-        </div>
-
-        <Button 
-          type="submit" 
-          className="w-full bg-blue-500 hover:bg-blue-600"
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating account...
-            </>
-          ) : (
-            'Create account'
-          )}
-        </Button>
-
-        <p className="text-sm text-center text-neutral-400">
-          Already have an account?{' '}
-          <Link href="/auth/login" className="text-blue-400 hover:text-blue-300 hover:underline">
-            Sign in
-          </Link>
-        </p>
-      </form>
+          <div className="relative w-full">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Already registered?
+              </span>
+            </div>
+          </div>
+          <Button className="w-full" variant="outline" asChild>
+            <Link href="/login">Log In</Link>
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   )
 }
