@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Crown } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -37,6 +38,9 @@ export default function SettingsPage() {
   const [isSavingOrg, setIsSavingOrg] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [members, setMembers] = useState<OrgMember[]>([])
+  const [isEditingOrgName, setIsEditingOrgName] = useState(false)
+  const [newOrgName, setNewOrgName] = useState('')
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const supabase = createClientComponentClient()
   const { toast } = useToast()
   const router = useRouter()
@@ -77,13 +81,21 @@ export default function SettingsPage() {
             // Then get tenant details
             const { data: tenant, error: tenantError } = await supabase
               .from('tenants')
-              .select('name')
+              .select('*')
               .eq('id', userTenant.tenant_id)
               .single()
 
-            if (tenantError) throw tenantError
+            if (tenantError) {
+              console.error('Error loading tenant:', tenantError)
+              throw tenantError
+            }
+            
             if (tenant) {
+              console.log('Loaded tenant data:', tenant)
               setOrganizationName(tenant.name)
+              console.log('Set organization name to:', tenant.name)
+            } else {
+              console.log('No tenant data found')
             }
 
             // Get all members of the organization
@@ -248,12 +260,18 @@ export default function SettingsPage() {
         })
         .eq('id', tenantId)
 
-      if (error) throw error
+      if (error) {
+        console.error('Error updating tenant:', error)
+        throw error
+      }
 
       toast({
         title: "Organization updated",
         description: "Your organization settings have been saved successfully.",
       })
+
+      // Refresh the page to show updated data
+      router.refresh()
     } catch (error) {
       console.error('Error saving organization:', error)
       toast({
@@ -401,30 +419,136 @@ export default function SettingsPage() {
               <CardContent className="space-y-6">
                 {isOwner ? (
                   <>
-                    <div className="space-y-2">
-                      <Label htmlFor="organizationName">Organization Name</Label>
-                      <Input
-                        id="organizationName"
-                        placeholder="Enter organization name"
-                        value={organizationName}
-                        onChange={(e) => setOrganizationName(e.target.value)}
-                        disabled={isLoading}
-                      />
-                      <Button 
-                        onClick={handleSaveOrganization}
-                        disabled={isSavingOrg || isLoading || !organizationName.trim()}
-                        className="mt-2"
-                      >
-                        {isSavingOrg ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          'Save Organization'
-                        )}
-                      </Button>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Organization Name</Label>
+                        <div className="flex items-center space-x-4">
+                          <div className="flex-grow p-2 bg-muted rounded-md">
+                            {organizationName}
+                          </div>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setNewOrgName(organizationName)
+                              setIsEditingOrgName(true)
+                            }}
+                          >
+                            Change Name
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Tenant ID</Label>
+                        <div className="p-2 bg-muted rounded-md font-mono text-sm">
+                          {tenantId}
+                        </div>
+                      </div>
                     </div>
+
+                    <Dialog open={isEditingOrgName} onOpenChange={setIsEditingOrgName}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Change Organization Name</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label>New Organization Name</Label>
+                            <Input
+                              placeholder="Enter new organization name"
+                              value={newOrgName}
+                              onChange={(e) => setNewOrgName(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsEditingOrgName(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              if (newOrgName.trim() !== organizationName) {
+                                setShowConfirmDialog(true)
+                              }
+                            }}
+                            disabled={!newOrgName.trim() || newOrgName.trim() === organizationName}
+                          >
+                            Update Name
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Confirm Organization Name Change</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <p>Are you sure you want to change the organization name from:</p>
+                          <p className="font-medium">{organizationName}</p>
+                          <p>to:</p>
+                          <p className="font-medium">{newOrgName}</p>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowConfirmDialog(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={async () => {
+                              setIsSavingOrg(true)
+                              try {
+                                const { error } = await supabase
+                                  .from('tenants')
+                                  .update({ 
+                                    name: newOrgName.trim(),
+                                    updated_at: new Date().toISOString()
+                                  })
+                                  .eq('id', tenantId)
+
+                                if (error) throw error
+
+                                setOrganizationName(newOrgName.trim())
+                                setIsEditingOrgName(false)
+                                setShowConfirmDialog(false)
+                                
+                                toast({
+                                  title: "Organization updated",
+                                  description: "Organization name has been changed successfully.",
+                                })
+
+                                router.refresh()
+                              } catch (error) {
+                                console.error('Error updating organization:', error)
+                                toast({
+                                  title: "Error updating organization",
+                                  description: "Please try again later.",
+                                  variant: "destructive",
+                                })
+                              } finally {
+                                setIsSavingOrg(false)
+                              }
+                            }}
+                            disabled={isSavingOrg}
+                          >
+                            {isSavingOrg ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              'Confirm Change'
+                            )}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
 
                     <div className="space-y-4">
                       <h3 className="font-semibold">Organization Members</h3>
@@ -469,8 +593,10 @@ export default function SettingsPage() {
                   </>
                 ) : (
                   <div className="text-center text-muted-foreground p-4">
-                    Organization: {organizationName}
-                    <div className="text-sm mt-2">
+                    <div className="font-medium text-lg mb-2">
+                      {organizationName}
+                    </div>
+                    <div className="text-sm">
                       Contact your organization owner to make changes to organization settings.
                     </div>
                   </div>

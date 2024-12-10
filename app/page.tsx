@@ -22,6 +22,7 @@ export default function LandingPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [name, setName] = useState('')
+  const [organizationName, setOrganizationName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
@@ -93,14 +94,15 @@ export default function LandingPage() {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             name: name,
+            organization_name: organizationName,
           }
         }
       })
 
       if (signUpError) throw signUpError
 
-      // Create profile after successful signup
       if (authData.user) {
+        // Create profile after successful signup
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -254,6 +256,16 @@ export default function LandingPage() {
                     onChange={(e) => setName(e.target.value)}
                     autoCapitalize="words"
                     autoComplete="name"
+                    autoCorrect="off"
+                    required
+                  />
+                  <Input
+                    id="organizationName"
+                    placeholder="Organization Name"
+                    type="text"
+                    value={organizationName}
+                    onChange={(e) => setOrganizationName(e.target.value)}
+                    autoCapitalize="words"
                     autoCorrect="off"
                     required
                   />

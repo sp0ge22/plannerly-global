@@ -83,38 +83,54 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Now create a tenant if one doesn't exist for this user
-    // (Assuming each user should have one tenant. If not, adjust logic accordingly)
-    // We'll use the serviceRoleClient to ensure no permission issues.
-
-    const tenantName = userEmail ? `${userEmail}'s Tenant` : 'New Tenant'
-
-    const { data: newTenant, error: tenantError } = await serviceRoleClient
-      .from('tenants')
-      .insert([{ name: tenantName }])
-      .select('id')
+    // Check if user already has a tenant relationship
+    const { data: existingUserTenant, error: userTenantCheckError } = await serviceRoleClient
+      .from('user_tenants')
+      .select('tenant_id')
+      .eq('user_id', userId)
       .single()
 
-    if (tenantError) {
-      console.error('Error creating tenant:', tenantError)
-    } else {
-      // Link the user to the tenant
-      const { error: userTenantError } = await serviceRoleClient
-        .from('user_tenants')
-        .insert([{
-          user_id: userId,
-          tenant_id: newTenant.id,
-          is_owner: true
-        }])
+    if (userTenantCheckError && userTenantCheckError.code !== 'PGRST116') {
+      console.error('Error checking user tenant:', userTenantCheckError)
+    }
 
-      if (userTenantError) {
-        console.error('Error linking user to tenant:', userTenantError)
-      } else {
-        console.log('Tenant created and linked successfully:', newTenant)
+    // Only create tenant and relationship if one doesn't exist
+    if (!existingUserTenant) {
+      // Get the organization name from user metadata if it exists
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) {
+        console.error('Error getting user:', userError)
+      }
+
+      const organizationName = user?.user_metadata?.organization_name || `${userEmail}'s Organization`
+
+      const { data: newTenant, error: tenantError } = await serviceRoleClient
+        .from('tenants')
+        .insert([{ name: organizationName }])
+        .select('id')
+        .single()
+
+      if (tenantError) {
+        console.error('Error creating tenant:', tenantError)
+      } else if (newTenant) {
+        // Link the user to the tenant
+        const { error: userTenantError } = await serviceRoleClient
+          .from('user_tenants')
+          .insert([{
+            user_id: userId,
+            tenant_id: newTenant.id,
+            is_owner: true
+          }])
+
+        if (userTenantError) {
+          console.error('Error linking user to tenant:', userTenantError)
+        } else {
+          console.log('Tenant created and linked successfully:', newTenant)
+        }
       }
     }
 
-    // Redirect to home page
+    // Redirect to the home page
     return NextResponse.redirect(new URL('/home', request.url))
   } catch (error) {
     console.error('Auth callback error:', error)
