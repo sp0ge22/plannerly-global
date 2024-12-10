@@ -7,9 +7,20 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2 } from 'lucide-react'
+import { Loader2, Crown } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from 'next/navigation'
+
+interface OrgMember {
+  user_id: string
+  is_owner: boolean
+  profile: {
+    name: string | null
+    email: string | null
+    avatar_letter: string | null
+    avatar_color: string | null
+  }
+}
 
 export default function SettingsPage() {
   const [name, setName] = useState('')
@@ -25,6 +36,7 @@ export default function SettingsPage() {
   const [tenantId, setTenantId] = useState<string | null>(null)
   const [isSavingOrg, setIsSavingOrg] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
+  const [members, setMembers] = useState<OrgMember[]>([])
   const supabase = createClientComponentClient()
   const { toast } = useToast()
   const router = useRouter()
@@ -72,6 +84,40 @@ export default function SettingsPage() {
             if (tenantError) throw tenantError
             if (tenant) {
               setOrganizationName(tenant.name)
+            }
+
+            // Get all members of the organization
+            const { data: orgMembers, error: membersError } = await supabase
+              .from('user_tenants')
+              .select('user_id, is_owner')
+              .eq('tenant_id', userTenant.tenant_id)
+
+            if (membersError) throw membersError
+
+            if (orgMembers) {
+              // Get profiles for all members
+              const userIds = orgMembers.map(member => member.user_id)
+              const { data: profiles, error: profilesError } = await supabase
+                .from('profiles')
+                .select('id, name, avatar_letter, avatar_color, email')
+                .in('id', userIds)
+
+              if (profilesError) throw profilesError
+
+              const formattedMembers: OrgMember[] = orgMembers.map(member => {
+                const profile = profiles?.find(p => p.id === member.user_id)
+                return {
+                  user_id: member.user_id,
+                  is_owner: member.is_owner,
+                  profile: {
+                    email: profile?.email || null,
+                    name: profile?.name || null,
+                    avatar_letter: profile?.avatar_letter || null,
+                    avatar_color: profile?.avatar_color || null
+                  }
+                }
+              })
+              setMembers(formattedMembers)
             }
           }
         }
@@ -233,17 +279,7 @@ export default function SettingsPage() {
     <div className="flex flex-col min-h-screen bg-neutral-50">
       <main className="flex-1 p-6">
         <div className="max-w-6xl mx-auto space-y-6">
-          <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold">Settings</h1>
-            {isOwner && (
-              <Button 
-                variant="outline"
-                onClick={() => router.push('/settings/organization')}
-              >
-                Organization Settings
-              </Button>
-            )}
-          </div>
+          <h1 className="text-3xl font-bold">Settings</h1>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
@@ -283,31 +319,16 @@ export default function SettingsPage() {
                       <SelectValue placeholder="Select a color" />
                     </SelectTrigger>
                     <SelectContent>
-                      {avatarColorOptions.map((color) => (
-                        <SelectItem key={color.value} value={color.value}>
-                          <div className="flex items-center">
-                            <div className={`w-4 h-4 rounded-full ${color.value} mr-2`} />
-                            {color.label}
-                          </div>
+                      {avatarColorOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    <div className={`w-12 h-12 rounded-full ${avatarColor} flex items-center justify-center text-white font-semibold`}>
-                      {avatarLetter}
-                    </div>
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    Preview of your avatar
-                  </div>
-                </div>
-
                 <Button 
-                  onClick={handleSave} 
+                  onClick={handleSave}
                   disabled={isSaving || isLoading}
                 >
                   {isSaving ? (
@@ -324,7 +345,7 @@ export default function SettingsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Change Password</CardTitle>
+                <CardTitle>Password</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -334,10 +355,9 @@ export default function SettingsPage() {
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Enter your current password"
+                    disabled={isLoading}
                   />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="newPassword">New Password</Label>
                   <Input
@@ -345,10 +365,9 @@ export default function SettingsPage() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Enter new password"
+                    disabled={isLoading}
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm New Password</Label>
                   <Input
@@ -356,14 +375,12 @@ export default function SettingsPage() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
+                    disabled={isLoading}
                   />
                 </div>
-
                 <Button
                   onClick={handlePasswordChange}
-                  disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword}
-                  variant="outline"
+                  disabled={isChangingPassword || isLoading || !currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
                 >
                   {isChangingPassword ? (
                     <>
@@ -374,6 +391,90 @@ export default function SettingsPage() {
                     'Change Password'
                   )}
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle>Organization Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {isOwner ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="organizationName">Organization Name</Label>
+                      <Input
+                        id="organizationName"
+                        placeholder="Enter organization name"
+                        value={organizationName}
+                        onChange={(e) => setOrganizationName(e.target.value)}
+                        disabled={isLoading}
+                      />
+                      <Button 
+                        onClick={handleSaveOrganization}
+                        disabled={isSavingOrg || isLoading || !organizationName.trim()}
+                        className="mt-2"
+                      >
+                        {isSavingOrg ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Organization'
+                        )}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="font-semibold">Organization Members</h3>
+                      <div className="space-y-4">
+                        {members.map((member) => (
+                          <div 
+                            key={member.user_id}
+                            className="flex items-center justify-between p-4 rounded-lg border bg-card"
+                          >
+                            <div className="flex items-center space-x-4">
+                              <div className={`w-10 h-10 rounded-full ${member.profile.avatar_color || 'bg-gray-400'} flex items-center justify-center text-white font-semibold`}>
+                                {member.profile.avatar_letter || 'U'}
+                              </div>
+                              <div>
+                                <div className="font-medium flex items-center">
+                                  {member.profile.name || member.profile.email}
+                                  {member.is_owner && (
+                                    <Crown className="w-4 h-4 ml-2 text-yellow-500" />
+                                  )}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {member.is_owner ? 'Owner' : 'Member'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+
+                        {isLoading && (
+                          <div className="flex justify-center p-4">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                          </div>
+                        )}
+
+                        {!isLoading && members.length === 0 && (
+                          <div className="text-center text-muted-foreground p-4">
+                            No members found
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center text-muted-foreground p-4">
+                    Organization: {organizationName}
+                    <div className="text-sm mt-2">
+                      Contact your organization owner to make changes to organization settings.
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -103,7 +103,8 @@ export async function GET(request: NextRequest) {
         .from('user_tenants')
         .insert([{
           user_id: userId,
-          tenant_id: newTenant.id
+          tenant_id: newTenant.id,
+          is_owner: true
         }])
 
       if (userTenantError) {
