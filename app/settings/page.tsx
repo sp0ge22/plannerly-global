@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Loader2, Crown } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from 'next/navigation'
+import { PostgrestError } from '@supabase/supabase-js'
 
 interface OrgMember {
   user_id: string
@@ -92,7 +93,7 @@ export default function SettingsPage() {
                 name
               )
             `)
-            .eq('user_id', session.user.id) as { data: UserTenant[] | null, error: any }
+            .eq('user_id', session.user.id) as { data: UserTenant[] | null, error: PostgrestError }
 
           if (userTenantError) throw userTenantError
 
