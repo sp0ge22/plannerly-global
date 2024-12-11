@@ -12,51 +12,57 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: userTenant, error: userTenantError } = await supabase
+    // Get all tenants the user is a member of
+    const { data: userTenants, error: userTenantError } = await supabase
       .from('user_tenants')
       .select('tenant_id')
       .eq('user_id', session.user.id)
-      .single()
 
-    if (userTenantError || !userTenant) {
+    if (userTenantError) {
       console.error('User tenant lookup error:', userTenantError)
-      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+      return NextResponse.json({ error: 'Could not determine tenants' }, { status: 403 })
     }
 
-    const tenantId = userTenant.tenant_id
+    if (!userTenants || userTenants.length === 0) {
+      return NextResponse.json({ error: 'User is not a member of any organization' }, { status: 403 })
+    }
+
+    const tenantIds = userTenants.map(ut => ut.tenant_id)
     const taskId = parseInt(params.id, 10)
     const { text, author } = await request.json()
 
-    // Ensure the task belongs to the user's tenant
+    // Ensure the task belongs to one of the user's tenants
     const { data: taskCheck, error: taskCheckError } = await supabase
       .from('tasks')
-      .select('id')
+      .select('id, tenant_id')
       .eq('id', taskId)
-      .eq('tenant_id', tenantId)
+      .in('tenant_id', tenantIds)
       .single()
 
     if (taskCheckError || !taskCheck) {
-      console.error('Task not found in tenant:', taskCheckError)
-      return NextResponse.json({ error: 'Task not found or not accessible' }, { status: 404 })
+      console.error('Task access error:', taskCheckError)
+      return NextResponse.json({ error: 'Task not found or access denied' }, { status: 403 })
     }
 
-    // Insert comment without tenant_id column
-    const { data, error } = await supabase
+    // Create the comment with the task's tenant_id
+    const { data: comment, error: commentError } = await supabase
       .from('comments')
-      .insert({ 
-        task_id: taskId, 
-        text, 
+      .insert([{
+        task_id: taskId,
+        text,
         author,
-        user_id: session.user.id
-      })
-      .select('*')
+        user_id: session.user.id,
+        tenant_id: taskCheck.tenant_id // Use the task's tenant_id
+      }])
+      .select()
+      .single()
 
-    if (error) {
-      console.error('Supabase error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (commentError) {
+      console.error('Comment creation error:', commentError)
+      return NextResponse.json({ error: commentError.message }, { status: 500 })
     }
 
-    return NextResponse.json(data[0])
+    return NextResponse.json(comment)
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 })

@@ -21,6 +21,7 @@ interface Resource {
   icon: string | null
   image_url: string | null
   created_at: string
+  tenant_id: string
 }
 
 interface Category {
@@ -28,14 +29,22 @@ interface Category {
   name: string
   description: string | null
   image_url: string | null
+  tenant_id: string
+}
+
+interface Tenant {
+  id: string
+  name: string
 }
 
 export default function ResourcesPage() {
   const [resources, setResources] = useState<Resource[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [tenants, setTenants] = useState<Tenant[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [selectedTenant, setSelectedTenant] = useState<string>('all')
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null)
@@ -49,6 +58,7 @@ export default function ResourcesPage() {
     description: '',
     category_id: '',
     image_url: '',
+    tenant_id: ''
   })
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -181,6 +191,7 @@ export default function ResourcesPage() {
       const data = await response.json()
       setResources(data.resources)
       setCategories(data.categories)
+      setTenants(data.tenants)
     } catch (error) {
       console.error('Error fetching resources:', error)
       toast({
@@ -210,7 +221,7 @@ export default function ResourcesPage() {
       const addedResource = await response.json()
       setResources(prev => [...prev, addedResource])
       setIsAddDialogOpen(false)
-      setNewResource({ title: '', url: '', description: '', category_id: '', image_url: '' })
+      setNewResource({ title: '', url: '', description: '', category_id: '', image_url: '', tenant_id: '' })
       
       toast({
         title: "Resource added",
@@ -262,7 +273,8 @@ export default function ResourcesPage() {
       resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       resource.description?.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesCategory = selectedCategory === 'all' || resource.category_id === parseInt(selectedCategory)
-    return matchesSearch && matchesCategory
+    const matchesTenant = selectedTenant === 'all' || resource.tenant_id === selectedTenant
+    return matchesSearch && matchesCategory && matchesTenant
   })
 
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -348,6 +360,19 @@ export default function ResourcesPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Select value={selectedTenant} onValueChange={setSelectedTenant}>
+                  <SelectTrigger className="bg-neutral-50">
+                    <SelectValue placeholder="All Organizations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Organizations</SelectItem>
+                    {tenants.map(tenant => (
+                      <SelectItem key={tenant.id} value={tenant.id}>
+                        {tenant.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -418,6 +443,7 @@ export default function ResourcesPage() {
                                 setSelectedResource(resource)
                                 setIsDeleteDialogOpen(true)
                               }}
+                              tenants={tenants}
                             />
                           ))}
                         </div>
@@ -452,6 +478,7 @@ export default function ResourcesPage() {
                             setSelectedResource(resource)
                             setIsDeleteDialogOpen(true)
                           }}
+                          tenants={tenants}
                         />
                       ))}
                     </div>
@@ -470,6 +497,24 @@ export default function ResourcesPage() {
             <DialogTitle>Add New Resource</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="organization">Organization</Label>
+              <Select
+                value={newResource.tenant_id}
+                onValueChange={(value) => setNewResource(prev => ({ ...prev, tenant_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants.map(tenant => (
+                    <SelectItem key={tenant.id} value={tenant.id}>
+                      {tenant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
               <Input
@@ -518,11 +563,13 @@ export default function ResourcesPage() {
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map(category => (
-                        <SelectItem key={category.id} value={category.id.toString()}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
+                      {categories
+                        .filter(category => category.tenant_id === newResource.tenant_id)
+                        .map(category => (
+                          <SelectItem key={category.id} value={category.id.toString()}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                   <Button
@@ -563,10 +610,25 @@ export default function ResourcesPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+            <Button variant="outline" onClick={() => {
+              setIsAddDialogOpen(false)
+              setNewResource({
+                title: '',
+                url: '',
+                description: '',
+                category_id: '',
+                image_url: '',
+                tenant_id: ''
+              })
+            }}>
               Cancel
             </Button>
-            <Button onClick={handleAddResource}>Add Resource</Button>
+            <Button 
+              onClick={handleAddResource}
+              disabled={!newResource.title || !newResource.url || !newResource.tenant_id}
+            >
+              Add Resource
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -802,12 +864,16 @@ export default function ResourcesPage() {
 function ResourceCard({ 
   resource, 
   onEdit, 
-  onDelete 
+  onDelete,
+  tenants 
 }: { 
   resource: Resource
   onEdit: () => void
   onDelete: () => void
+  tenants: Tenant[]
 }) {
+  const tenant = tenants.find((t: Tenant) => t.id === resource.tenant_id)
+  
   return (
     <Card 
       className="group hover:shadow-lg transition-all duration-200 overflow-hidden relative cursor-pointer"
@@ -863,6 +929,11 @@ function ResourceCard({
                 {resource.description && (
                   <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
                     {resource.description}
+                  </p>
+                )}
+                {tenant && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {tenant.name}
                   </p>
                 )}
               </div>

@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Crown } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -20,6 +19,15 @@ interface OrgMember {
     email: string | null
     avatar_letter: string | null
     avatar_color: string | null
+  }
+}
+
+interface UserTenant {
+  tenant_id: string
+  is_owner: boolean
+  tenants: {
+    id: string
+    name: string
   }
 }
 
@@ -41,6 +49,14 @@ export default function SettingsPage() {
   const [isEditingOrgName, setIsEditingOrgName] = useState(false)
   const [newOrgName, setNewOrgName] = useState('')
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [newTenantId, setNewTenantId] = useState('')
+  const [isJoiningOrg, setIsJoiningOrg] = useState(false)
+  const [organizations, setOrganizations] = useState<Array<{
+    id: string;
+    name: string;
+    is_owner: boolean;
+  }>>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
   const supabase = createClientComponentClient()
   const { toast } = useToast()
   const router = useRouter()
@@ -65,71 +81,68 @@ export default function SettingsPage() {
             setAvatarLetter(profileData.avatar_letter || 'U')
           }
 
-          // First get user's tenant relationship
-          const { data: userTenant, error: userTenantError } = await supabase
+          // Get all user's tenant relationships and tenant details
+          const { data: userTenants, error: userTenantError } = await supabase
             .from('user_tenants')
-            .select('tenant_id, is_owner')
-            .eq('user_id', session.user.id)
-            .single()
+            .select(`
+              tenant_id,
+              is_owner,
+              tenants (
+                id,
+                name
+              )
+            `)
+            .eq('user_id', session.user.id) as { data: UserTenant[] | null, error: any }
 
           if (userTenantError) throw userTenantError
 
-          if (userTenant) {
-            setTenantId(userTenant.tenant_id)
-            setIsOwner(userTenant.is_owner)
-
-            // Then get tenant details
-            const { data: tenant, error: tenantError } = await supabase
-              .from('tenants')
-              .select('*')
-              .eq('id', userTenant.tenant_id)
-              .single()
-
-            if (tenantError) {
-              console.error('Error loading tenant:', tenantError)
-              throw tenantError
-            }
+          if (userTenants) {
+            const orgs = userTenants.map(ut => ({
+              id: ut.tenant_id,
+              name: ut.tenants.name,
+              is_owner: ut.is_owner
+            }))
+            setOrganizations(orgs)
             
-            if (tenant) {
-              console.log('Loaded tenant data:', tenant)
-              setOrganizationName(tenant.name)
-              console.log('Set organization name to:', tenant.name)
-            } else {
-              console.log('No tenant data found')
+            // Set the first organization as selected by default
+            if (orgs.length > 0 && !selectedOrgId) {
+              setSelectedOrgId(orgs[0].id)
             }
 
-            // Get all members of the organization
-            const { data: orgMembers, error: membersError } = await supabase
-              .from('user_tenants')
-              .select('user_id, is_owner')
-              .eq('tenant_id', userTenant.tenant_id)
+            // Get members for the selected organization
+            if (selectedOrgId) {
+              const { data: orgMembers, error: membersError } = await supabase
+                .from('user_tenants')
+                .select('user_id, is_owner')
+                .eq('tenant_id', selectedOrgId)
 
-            if (membersError) throw membersError
+              if (membersError) throw membersError
 
-            if (orgMembers) {
-              // Get profiles for all members
-              const userIds = orgMembers.map(member => member.user_id)
-              const { data: profiles, error: profilesError } = await supabase
-                .from('profiles')
-                .select('id, name, avatar_letter, avatar_color, email')
-                .in('id', userIds)
+              if (orgMembers) {
+                // Get profiles for all members
+                const userIds = orgMembers.map(member => member.user_id)
+                const { data: profiles, error: profilesError } = await supabase
+                  .from('profiles')
+                  .select('id, name, avatar_letter, avatar_color, email')
+                  .in('id', userIds)
 
-              if (profilesError) throw profilesError
+                if (profilesError) throw profilesError
 
-              const formattedMembers: OrgMember[] = orgMembers.map(member => {
-                const profile = profiles?.find(p => p.id === member.user_id)
-                return {
-                  user_id: member.user_id,
-                  is_owner: member.is_owner,
-                  profile: {
-                    email: profile?.email || null,
-                    name: profile?.name || null,
-                    avatar_letter: profile?.avatar_letter || null,
-                    avatar_color: profile?.avatar_color || null
+                const formattedMembers: OrgMember[] = orgMembers.map(member => {
+                  const profile = profiles?.find(p => p.id === member.user_id)
+                  return {
+                    user_id: member.user_id,
+                    is_owner: member.is_owner,
+                    profile: {
+                      email: profile?.email || null,
+                      name: profile?.name || null,
+                      avatar_letter: profile?.avatar_letter || null,
+                      avatar_color: profile?.avatar_color || null
+                    }
                   }
-                }
-              })
-              setMembers(formattedMembers)
+                })
+                setMembers(formattedMembers)
+              }
             }
           }
         }
@@ -146,7 +159,7 @@ export default function SettingsPage() {
     }
 
     loadProfile()
-  }, [supabase, toast])
+  }, [supabase, toast, selectedOrgId])
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -284,6 +297,73 @@ export default function SettingsPage() {
     }
   }
 
+  const handleJoinOrganization = async () => {
+    if (!newTenantId.trim()) return
+    
+    setIsJoiningOrg(true)
+    try {
+      // First verify the tenant exists
+      const { data: tenant, error: tenantError } = await supabase
+        .from('tenants')
+        .select('name')
+        .eq('id', newTenantId)
+        .single()
+
+      if (tenantError) {
+        throw new Error('Organization not found')
+      }
+
+      // Get current user
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session?.user) {
+        throw new Error('Not authenticated')
+      }
+
+      // Check if already a member
+      const { data: existingMembership, error: membershipError } = await supabase
+        .from('user_tenants')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', newTenantId)
+        .single()
+
+      if (existingMembership) {
+        throw new Error('You are already a member of this organization')
+      }
+
+      // Add user to organization
+      const { error: joinError } = await supabase
+        .from('user_tenants')
+        .insert([{
+          user_id: session.user.id,
+          tenant_id: newTenantId,
+          is_owner: false
+        }])
+
+      if (joinError) throw joinError
+
+      toast({
+        title: "Success",
+        description: `You have joined ${tenant.name}`,
+      })
+
+      // Clear the input
+      setNewTenantId('')
+      
+      // Refresh the page to show the new organization
+      router.refresh()
+    } catch (error) {
+      console.error('Error joining organization:', error)
+      toast({
+        title: "Error joining organization",
+        description: error instanceof Error ? error.message : "Please try again later.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsJoiningOrg(false)
+    }
+  }
+
   const avatarColorOptions = [
     { value: 'bg-red-600', label: 'Red' },
     { value: 'bg-blue-600', label: 'Blue' },
@@ -414,142 +494,59 @@ export default function SettingsPage() {
 
             <Card className="md:col-span-2">
               <CardHeader>
-                <CardTitle>Organization Settings</CardTitle>
+                <CardTitle>Organizations</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {isOwner ? (
-                  <>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Organization Name</Label>
-                        <div className="flex items-center space-x-4">
-                          <div className="flex-grow p-2 bg-muted rounded-md">
-                            {organizationName}
+                <div className="space-y-4">
+                  {organizations.map((org) => (
+                    <div
+                      key={org.id}
+                      className={`p-4 rounded-lg border ${
+                        selectedOrgId === org.id ? 'border-primary' : 'border-muted'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium flex items-center">
+                            {org.name}
+                            {org.is_owner && (
+                              <Crown className="w-4 h-4 ml-2 text-yellow-500" />
+                            )}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {org.is_owner ? 'Owner' : 'Member'}
+                          </p>
+                          <div className="text-xs text-muted-foreground font-mono mt-1">
+                            ID: {org.id}
                           </div>
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setNewOrgName(organizationName)
-                              setIsEditingOrgName(true)
-                            }}
-                          >
-                            Change Name
-                          </Button>
                         </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Tenant ID</Label>
-                        <div className="p-2 bg-muted rounded-md font-mono text-sm">
-                          {tenantId}
+                        <div className="space-x-2">
+                          <Button
+                            variant={selectedOrgId === org.id ? "default" : "outline"}
+                            onClick={() => setSelectedOrgId(org.id)}
+                          >
+                            {selectedOrgId === org.id ? 'Selected' : 'Select'}
+                          </Button>
+                          {org.is_owner && (
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedOrgId(org.id)
+                                setNewOrgName(org.name)
+                                setIsEditingOrgName(true)
+                              }}
+                            >
+                              Edit Name
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
+                  ))}
+                </div>
 
-                    <Dialog open={isEditingOrgName} onOpenChange={setIsEditingOrgName}>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Change Organization Name</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-2">
-                            <Label>New Organization Name</Label>
-                            <Input
-                              placeholder="Enter new organization name"
-                              value={newOrgName}
-                              onChange={(e) => setNewOrgName(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            variant="outline"
-                            onClick={() => setIsEditingOrgName(false)}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              if (newOrgName.trim() !== organizationName) {
-                                setShowConfirmDialog(true)
-                              }
-                            }}
-                            disabled={!newOrgName.trim() || newOrgName.trim() === organizationName}
-                          >
-                            Update Name
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-
-                    <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Confirm Organization Name Change</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <p>Are you sure you want to change the organization name from:</p>
-                          <p className="font-medium">{organizationName}</p>
-                          <p>to:</p>
-                          <p className="font-medium">{newOrgName}</p>
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            variant="outline"
-                            onClick={() => setShowConfirmDialog(false)}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={async () => {
-                              setIsSavingOrg(true)
-                              try {
-                                const { error } = await supabase
-                                  .from('tenants')
-                                  .update({ 
-                                    name: newOrgName.trim(),
-                                    updated_at: new Date().toISOString()
-                                  })
-                                  .eq('id', tenantId)
-
-                                if (error) throw error
-
-                                setOrganizationName(newOrgName.trim())
-                                setIsEditingOrgName(false)
-                                setShowConfirmDialog(false)
-                                
-                                toast({
-                                  title: "Organization updated",
-                                  description: "Organization name has been changed successfully.",
-                                })
-
-                                router.refresh()
-                              } catch (error) {
-                                console.error('Error updating organization:', error)
-                                toast({
-                                  title: "Error updating organization",
-                                  description: "Please try again later.",
-                                  variant: "destructive",
-                                })
-                              } finally {
-                                setIsSavingOrg(false)
-                              }
-                            }}
-                            disabled={isSavingOrg}
-                          >
-                            {isSavingOrg ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              'Confirm Change'
-                            )}
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-
+                {selectedOrgId && (
+                  <>
                     <div className="space-y-4">
                       <h3 className="font-semibold">Organization Members</h3>
                       <div className="space-y-4">
@@ -591,16 +588,42 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   </>
-                ) : (
-                  <div className="text-center text-muted-foreground p-4">
-                    <div className="font-medium text-lg mb-2">
-                      {organizationName}
-                    </div>
-                    <div className="text-sm">
-                      Contact your organization owner to make changes to organization settings.
-                    </div>
-                  </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle>Join Another Organization</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Organization ID</Label>
+                  <div className="flex space-x-2">
+                    <Input
+                      placeholder="Enter organization ID"
+                      value={newTenantId}
+                      onChange={(e) => setNewTenantId(e.target.value)}
+                      disabled={isJoiningOrg}
+                    />
+                    <Button
+                      onClick={handleJoinOrganization}
+                      disabled={isJoiningOrg || !newTenantId.trim()}
+                    >
+                      {isJoiningOrg ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Joining...
+                        </>
+                      ) : (
+                        'Join'
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Ask the organization owner for their Organization ID to join their organization.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>

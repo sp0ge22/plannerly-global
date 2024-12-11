@@ -13,7 +13,8 @@ create table
     archived boolean null default false,
     tenant_id uuid null,
     constraint tasks_pkey primary key (id),
-    constraint tasks_user_id_fkey foreign key (user_id) references auth.users (id)
+    constraint tasks_user_id_fkey foreign key (user_id) references auth.users (id),
+    constraint tasks_tenant_id_fkey foreign key (tenant_id) references tenants (id)
   ) tablespace pg_default;
 
 create index if not exists idx_tasks_archived on public.tasks using btree (archived) tablespace pg_default;
@@ -21,3 +22,5 @@ create index if not exists idx_tasks_archived on public.tasks using btree (archi
 create index if not exists idx_tasks_due on public.tasks using btree (due) tablespace pg_default;
 
 create index if not exists idx_tasks_user_id on public.tasks using btree (user_id) tablespace pg_default;
+
+create index if not exists idx_tasks_tenant_id on public.tasks using btree (tenant_id) tablespace pg_default;

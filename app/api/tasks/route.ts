@@ -11,18 +11,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: userTenant, error: userTenantError } = await supabase
+    const { data: userTenants, error: userTenantError } = await supabase
       .from('user_tenants')
       .select('tenant_id')
       .eq('user_id', session.user.id)
-      .single()
 
-    if (userTenantError || !userTenant) {
+    if (userTenantError) {
       console.error('User tenant lookup error:', userTenantError)
-      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+      return NextResponse.json({ error: 'Could not determine tenants' }, { status: 403 })
     }
 
-    const tenantId = userTenant.tenant_id
+    if (!userTenants || userTenants.length === 0) {
+      return NextResponse.json({ error: 'User is not a member of any organization' }, { status: 403 })
+    }
+
+    const tenantIds = userTenants.map(ut => ut.tenant_id)
     const task = await request.json()
     console.log('Received task:', task)
 
@@ -30,11 +33,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Title, body, and priority are required' }, { status: 400 })
     }
 
+    // Use the tenant_id provided in the task, or default to the first tenant
+    const targetTenantId = task.tenant_id || tenantIds[0]
+
+    // Verify the user has access to this tenant
+    if (!tenantIds.includes(targetTenantId)) {
+      return NextResponse.json({ error: 'Not authorized for this organization' }, { status: 403 })
+    }
+
     const { data, error } = await supabase
       .from('tasks')
       .insert([{ 
         ...task,
-        tenant_id: tenantId,
+        tenant_id: targetTenantId,
         status: task.status || 'To Do', 
         assignee: task.assignee || 'Unassigned',
         due: task.due || null,
@@ -63,18 +74,21 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: userTenant, error: userTenantError } = await supabase
+    const { data: userTenants, error: userTenantError } = await supabase
       .from('user_tenants')
       .select('tenant_id')
       .eq('user_id', session.user.id)
-      .single()
 
-    if (userTenantError || !userTenant) {
+    if (userTenantError) {
       console.error('User tenant lookup error:', userTenantError)
-      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+      return NextResponse.json({ error: 'Could not determine tenants' }, { status: 403 })
     }
 
-    const tenantId = userTenant.tenant_id
+    if (!userTenants || userTenants.length === 0) {
+      return NextResponse.json({ error: 'User is not a member of any organization' }, { status: 403 })
+    }
+
+    const tenantIds = userTenants.map(ut => ut.tenant_id)
 
     // Get user's profile to check if admin
     const { data: profile, error: profileError } = await supabase
@@ -103,7 +117,10 @@ export async function GET() {
 
     console.log('User permissions:', permissions)
 
-    let query = supabase.from('tasks').select('*').eq('tenant_id', tenantId)
+    let query = supabase
+      .from('tasks')
+      .select('*')
+      .in('tenant_id', tenantIds)
 
     if (!profile?.is_admin) {
       const allowedAssignees = permissions?.map(p => p.assignee) || []
@@ -126,9 +143,24 @@ export async function GET() {
 
     console.log('Tasks found:', tasks?.length)
 
+    // Get tenant names for the tasks
+    const uniqueTenantIds = Array.from(new Set(tasks.map(t => t.tenant_id)))
+    const { data: tenants, error: tenantsError } = await supabase
+      .from('tenants')
+      .select('id, name')
+      .in('id', uniqueTenantIds)
+
+    if (tenantsError) {
+      console.error('Error fetching tenant names:', tenantsError)
+    }
+
+    // Create a map of tenant IDs to names
+    const tenantMap = (tenants || []).reduce((acc, tenant) => {
+      acc[tenant.id] = tenant.name
+      return acc
+    }, {} as Record<string, string>)
+
     // Fetch comments for the retrieved tasks
-    // Since we rely on tasks for tenant filtering,
-    // we don't need tenant_id on comments.
     const { data: comments, error: commentsError } = await supabase
       .from('comments')
       .select('*')
@@ -140,12 +172,13 @@ export async function GET() {
       return NextResponse.json({ error: commentsError.message }, { status: 500 })
     }
 
-    const tasksWithComments = tasks.map(task => ({
+    const tasksWithCommentsAndTenants = tasks.map(task => ({
       ...task,
+      tenant_name: tenantMap[task.tenant_id] || 'Unknown Organization',
       comments: comments?.filter(comment => comment.task_id === task.id) || []
     }))
 
-    return NextResponse.json(tasksWithComments)
+    return NextResponse.json(tasksWithCommentsAndTenants)
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 })
