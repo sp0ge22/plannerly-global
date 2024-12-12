@@ -2,7 +2,7 @@
 
 import { Bell, Menu, X } from 'lucide-react'
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from 'next/link'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
@@ -31,7 +31,7 @@ export function Header() {
         if (session?.user) {
           const { data, error } = await supabase
             .from('profiles')
-            .select('avatar_color, avatar_letter, is_admin')
+            .select('avatar_color, avatar_letter, is_admin, avatar_url')
             .eq('id', session.user.id)
             .single()
 
@@ -39,6 +39,9 @@ export function Header() {
             setAvatarColor(data.avatar_color || 'bg-red-600')
             setAvatarLetter(data.avatar_letter || 'U')
             setIsAdmin(data.is_admin || false)
+            if (data.avatar_url) {
+              localStorage.setItem('avatarUrl', data.avatar_url)
+            }
           }
         }
       } catch (error) {
@@ -164,6 +167,7 @@ export function Header() {
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                         <Avatar>
+                          <AvatarImage src={localStorage.getItem('avatarUrl') || undefined} />
                           <AvatarFallback className={isLoading ? 'animate-pulse bg-gray-600' : avatarColor}>
                             {isLoading ? '' : avatarLetter}
                           </AvatarFallback>

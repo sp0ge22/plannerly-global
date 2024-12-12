@@ -1,4 +1,4 @@
-import { Calendar, LucideIcon, Moon, SunMedium, Github, Laptop, LogOut, Mail, MessageSquare, Plus, PlusCircle, Settings, Trash, User, UserPlus, Users } from 'lucide-react'
+import { Calendar, LucideIcon, Moon, SunMedium, Github, Laptop, LogOut, Mail, MessageSquare, Plus, PlusCircle, Settings, Trash, User, UserPlus, Users, ClipboardList, Bot, BookMarked, UsersRound } from 'lucide-react'
 
 export type Icon = React.ComponentType<React.SVGProps<SVGSVGElement>>
 
@@ -18,6 +18,10 @@ export const Icons = {
   user: User,
   userPlus: UserPlus,
   users: Users,
+  task: ClipboardList,
+  aiAssistant: Bot,
+  resources: BookMarked,
+  collaboration: UsersRound,
   google: (props: React.ComponentProps<LucideIcon>) => (
     <svg {...props} viewBox="0 0 24 24">
       <path

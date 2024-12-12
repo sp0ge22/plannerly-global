@@ -7,10 +7,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Crown } from 'lucide-react'
+import { Loader2, Crown, User } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from 'next/navigation'
 import { PostgrestError } from '@supabase/supabase-js'
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Separator } from "@/components/ui/separator"
 
 interface OrgMember {
   user_id: string
@@ -18,8 +20,7 @@ interface OrgMember {
   profile: {
     name: string | null
     email: string | null
-    avatar_letter: string | null
-    avatar_color: string | null
+    avatar_url: string | null
   }
 }
 
@@ -34,8 +35,7 @@ interface UserTenant {
 
 export default function SettingsPage() {
   const [name, setName] = useState('')
-  const [avatarColor, setAvatarColor] = useState('bg-red-600')
-  const [avatarLetter, setAvatarLetter] = useState('U')
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -58,6 +58,7 @@ export default function SettingsPage() {
     is_owner: boolean;
   }>>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const supabase = createClientComponentClient()
   const { toast } = useToast()
   const router = useRouter()
@@ -71,15 +72,14 @@ export default function SettingsPage() {
           // Load profile data
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
-            .select('name, avatar_color, avatar_letter')
+            .select('name, avatar_url')
             .eq('id', session.user.id)
             .single()
 
           if (profileError) throw profileError
           if (profileData) {
             setName(profileData.name || '')
-            setAvatarColor(profileData.avatar_color || 'bg-red-600')
-            setAvatarLetter(profileData.avatar_letter || 'U')
+            setAvatarUrl(profileData.avatar_url)
           }
 
           // Get all user's tenant relationships and tenant details
@@ -124,7 +124,7 @@ export default function SettingsPage() {
                 const userIds = orgMembers.map(member => member.user_id)
                 const { data: profiles, error: profilesError } = await supabase
                   .from('profiles')
-                  .select('id, name, avatar_letter, avatar_color, email')
+                  .select('id, name, avatar_letter, avatar_color, email, avatar_url')
                   .in('id', userIds)
 
                 if (profilesError) throw profilesError
@@ -137,8 +137,7 @@ export default function SettingsPage() {
                     profile: {
                       email: profile?.email || null,
                       name: profile?.name || null,
-                      avatar_letter: profile?.avatar_letter || null,
-                      avatar_color: profile?.avatar_color || null
+                      avatar_url: profile?.avatar_url || null
                     }
                   }
                 })
@@ -173,8 +172,6 @@ export default function SettingsPage() {
         .upsert({
           id: session.user.id,
           name: name.trim(),
-          avatar_color: avatarColor,
-          avatar_letter: avatarLetter,
           updated_at: new Date().toISOString(),
         })
 
@@ -365,14 +362,55 @@ export default function SettingsPage() {
     }
   }
 
-  const avatarColorOptions = [
-    { value: 'bg-red-600', label: 'Red' },
-    { value: 'bg-blue-600', label: 'Blue' },
-    { value: 'bg-green-600', label: 'Green' },
-    { value: 'bg-purple-600', label: 'Purple' },
-    { value: 'bg-yellow-600', label: 'Yellow' },
-    { value: 'bg-pink-600', label: 'Pink' },
-  ]
+  const handleUploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploading(true)
+
+      const file = event.target.files?.[0]
+      if (!file) return
+
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) throw new Error('No user session found')
+
+      const fileExt = file.name.split('.').pop()
+      const filePath = `${session.user.id}/${Math.random()}.${fileExt}`
+
+      // Upload the file to Supabase storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file)
+
+      if (uploadError) throw uploadError
+
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath)
+
+      // Update the profile with the new avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', session.user.id)
+
+      if (updateError) throw updateError
+
+      setAvatarUrl(publicUrl)
+      toast({
+        title: "Success",
+        description: "Avatar updated successfully",
+      })
+    } catch (error) {
+      console.error('Error uploading avatar:', error)
+      toast({
+        title: "Error",
+        description: "There was an error uploading your avatar",
+        variant: "destructive",
+      })
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-neutral-50">
@@ -385,60 +423,83 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Profile Settings</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Display Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="Enter your name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    disabled={isLoading}
-                  />
+              <CardContent>
+                <div className="flex flex-col space-y-8">
+                  {/* Profile Picture Section */}
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Profile Picture</h3>
+                    <div className="flex items-start space-x-6">
+                      <Avatar className="h-20 w-20">
+                        <AvatarImage src={avatarUrl ?? undefined} />
+                        <AvatarFallback className="bg-muted">
+                          <User className="h-10 w-10 text-muted-foreground" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col space-y-3">
+                        <Button 
+                          variant="outline" 
+                          disabled={uploading} 
+                          onClick={() => document.getElementById('avatar-upload')?.click()}
+                          className="w-[140px]"
+                        >
+                          {uploading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            'Change Picture'
+                          )}
+                        </Button>
+                        <input
+                          type="file"
+                          id="avatar-upload"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleUploadAvatar}
+                          disabled={uploading}
+                        />
+                        <p className="text-[13px] text-muted-foreground">
+                          JPG, GIF or PNG. Max size of 2MB.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Profile Information Section */}
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Profile Information</h3>
+                    <div className="max-w-sm space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Display Name</Label>
+                        <Input
+                          id="name"
+                          placeholder="Enter your name"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          disabled={isLoading}
+                        />
+                      </div>
+
+                      <Button 
+                        onClick={handleSave}
+                        disabled={isSaving || isLoading}
+                        className="w-full"
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving Changes...
+                          </>
+                        ) : (
+                          'Save Changes'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="avatarLetter">Avatar Letter</Label>
-                  <Input
-                    id="avatarLetter"
-                    placeholder="Single letter"
-                    value={avatarLetter}
-                    onChange={(e) => setAvatarLetter(e.target.value.charAt(0).toUpperCase())}
-                    maxLength={1}
-                    disabled={isLoading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="avatarColor">Avatar Color</Label>
-                  <Select
-                    value={avatarColor}
-                    onValueChange={setAvatarColor}
-                    disabled={isLoading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a color" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {avatarColorOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button 
-                  onClick={handleSave}
-                  disabled={isSaving || isLoading}
-                >
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Changes'
-                  )}
-                </Button>
               </CardContent>
             </Card>
 
@@ -557,9 +618,12 @@ export default function SettingsPage() {
                             className="flex items-center justify-between p-4 rounded-lg border bg-card"
                           >
                             <div className="flex items-center space-x-4">
-                              <div className={`w-10 h-10 rounded-full ${member.profile.avatar_color || 'bg-gray-400'} flex items-center justify-center text-white font-semibold`}>
-                                {member.profile.avatar_letter || 'U'}
-                              </div>
+                              <Avatar className="w-10 h-10">
+                                <AvatarImage src={member.profile.avatar_url ?? undefined} />
+                                <AvatarFallback className="bg-muted">
+                                  <User className="h-5 w-5 text-muted-foreground" />
+                                </AvatarFallback>
+                              </Avatar>
                               <div>
                                 <div className="font-medium flex items-center">
                                   {member.profile.name || member.profile.email}
