@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Task } from '@/types/task';
 import { TaskDetailsDialog } from './TaskDetailsDialog';
 import { Button } from '@/components/ui/button';
-import { Trash2, Calendar, Clock, AlertCircle, Flag, UserCircle, Archive, ArchiveRestore } from 'lucide-react';
+import { Trash2, Calendar, Clock, AlertCircle, Flag, UserCircle, Archive, ArchiveRestore, Building2 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -119,6 +119,10 @@ export function TaskCard({
                     <Flag className="w-3 h-3 mr-1" />
                     {task.priority}
                   </Badge>
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <Building2 className="w-4 h-4 mr-1" />
+                  <span className="truncate">{task.tenant_name || 'Unknown Organization'}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="flex flex-col bg-gray-50 p-2 rounded">

@@ -41,6 +41,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Not authorized for this organization' }, { status: 403 })
     }
 
+    // Get the tenant name
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .select('name')
+      .eq('id', targetTenantId)
+      .single()
+
+    if (tenantError) {
+      console.error('Error fetching tenant:', tenantError)
+      return NextResponse.json({ error: 'Could not fetch organization details' }, { status: 500 })
+    }
+
     const { data, error } = await supabase
       .from('tasks')
       .insert([{ 
@@ -58,7 +70,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json(data[0])
+    // Add tenant name to the response
+    const taskWithTenant = {
+      ...data[0],
+      tenant_name: tenant.name,
+      comments: []
+    }
+
+    return NextResponse.json(taskWithTenant)
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 })

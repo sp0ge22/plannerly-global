@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react'
+import { useState, ReactNode, useEffect } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,6 +14,17 @@ import { Calendar as CalendarIcon } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+
+type Tenant = {
+  id: string
+  name: string
+}
+
+type UserTenantResponse = {
+  tenant_id: string
+  tenants: Tenant
+}
 
 type AddTaskDialogProps = {
   addTask: (task: Omit<Task, 'id' | 'comments' | 'created_at'>) => Promise<boolean>
@@ -28,12 +39,58 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
     status: 'To Do',
     priority: 'Medium',
     due: null,
-    archived: false
+    archived: false,
+    tenant_id: ''
   })
+  const [tenants, setTenants] = useState<Tenant[]>([])
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const { toast } = useToast()
+  const supabase = createClientComponentClient()
+
+  useEffect(() => {
+    if (isOpen) {
+      const fetchTenants = async () => {
+        const { data: userTenants, error } = await supabase
+          .from('user_tenants')
+          .select(`
+            tenant_id,
+            tenants:tenant_id (
+              id,
+              name
+            )
+          `)
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+          .returns<UserTenantResponse[]>()
+
+        if (error) {
+          console.error('Error fetching tenants:', error)
+          toast({
+            title: "Error fetching organizations",
+            description: "Could not load your organizations.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        const fetchedTenants = userTenants
+          .map(ut => ut.tenants)
+          .filter((tenant): tenant is Tenant => 
+            tenant !== null && 
+            'id' in tenant && 
+            'name' in tenant
+          )
+
+        setTenants(fetchedTenants)
+        if (fetchedTenants.length > 0 && !newTask.tenant_id) {
+          setNewTask(prev => ({ ...prev, tenant_id: fetchedTenants[0].id }))
+        }
+      }
+
+      fetchTenants()
+    }
+  }, [isOpen, supabase])
 
   const getPriorityColor = (priority: Task['priority']) => {
     const colors = {
@@ -92,6 +149,15 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
       return
     }
 
+    if (!newTask.tenant_id) {
+      toast({
+        title: "Organization required",
+        description: "Please select an organization for the task.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsSubmitting(true)
     try {
       const success = await addTask(newTask)
@@ -104,7 +170,8 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
           status: 'To Do', 
           priority: 'Medium', 
           due: null,
-          archived: false
+          archived: false,
+          tenant_id: tenants[0]?.id || ''
         })
         toast({
           title: "Task added successfully",
@@ -143,6 +210,25 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-6 py-4"
         >
+          <div className="space-y-2">
+            <Label htmlFor="tenant-select" className="text-sm font-medium">Organization</Label>
+            <Select
+              value={newTask.tenant_id}
+              onValueChange={(value) => setNewTask({ ...newTask, tenant_id: value })}
+            >
+              <SelectTrigger id="tenant-select" className="w-full">
+                <SelectValue placeholder="Select organization" />
+              </SelectTrigger>
+              <SelectContent>
+                {tenants.map((tenant) => (
+                  <SelectItem key={tenant.id} value={tenant.id}>
+                    {tenant.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="new-title" className="text-sm font-medium">Title</Label>
             <Input

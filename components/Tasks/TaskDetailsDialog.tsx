@@ -202,14 +202,32 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
     setIsEditing(false);
   }
 
-  const handleStatusChange = (newStatus: Task['status']) => {
-    const updatedTask = { ...task, status: newStatus };
-    updateTask(updatedTask);
+  const handleStatusChange = async (newStatus: Task['status']) => {
+    try {
+      const updatedTask = { ...task, status: newStatus };
+      await updateTask(updatedTask);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({
+        title: "Failed to update status",
+        description: "There was an error updating the task status. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handlePriorityChange = (newPriority: Task['priority']) => {
-    const updatedTask = { ...task, priority: newPriority };
-    updateTask(updatedTask);
+  const handlePriorityChange = async (newPriority: Task['priority']) => {
+    try {
+      const updatedTask = { ...task, priority: newPriority };
+      await updateTask(updatedTask);
+    } catch (error) {
+      console.error('Error updating priority:', error);
+      toast({
+        title: "Failed to update priority",
+        description: "There was an error updating the task priority. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

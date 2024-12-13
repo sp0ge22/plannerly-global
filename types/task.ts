@@ -21,5 +21,6 @@ export interface Task {
   due: string | null;
   comments: Comment[];
   tenant_id: string;
+  tenant_name?: string;
   archived: boolean;
 }
