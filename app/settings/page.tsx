@@ -7,12 +7,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Crown, User } from 'lucide-react'
+import { Loader2, Crown, User, Pencil } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from 'next/navigation'
 import { PostgrestError } from '@supabase/supabase-js'
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
 interface OrgMember {
   user_id: string
@@ -558,77 +560,101 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Organizations</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  {organizations.map((org) => (
-                    <div
-                      key={org.id}
-                      className={`p-4 rounded-lg border ${
-                        selectedOrgId === org.id ? 'border-primary' : 'border-muted'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-medium flex items-center">
-                            {org.name}
+              <CardContent>
+                <Tabs defaultValue="my-orgs" className="space-y-6">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="my-orgs">My Organizations</TabsTrigger>
+                    <TabsTrigger value="join">Join Organization</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="my-orgs" className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {organizations.map((org) => (
+                        <div
+                          key={org.id}
+                          className={`p-4 rounded-lg border transition-all ${
+                            selectedOrgId === org.id 
+                              ? 'border-primary bg-primary/5 shadow-sm' 
+                              : 'border-muted hover:border-primary/50'
+                          }`}
+                        >
+                          <div className="space-y-4">
+                            <div className="flex items-start justify-between">
+                              <div className="space-y-1">
+                                <h3 className="font-medium flex items-center text-lg">
+                                  {org.name}
+                                  {org.is_owner && (
+                                    <Crown className="w-4 h-4 ml-2 text-yellow-500" />
+                                  )}
+                                </h3>
+                                <div className="space-y-1">
+                                  <span className="text-sm text-muted-foreground">
+                                    {org.is_owner ? 'Owner' : 'Member'}
+                                  </span>
+                                  <div className="flex items-center space-x-1 text-sm text-muted-foreground">
+                                    <span>Organization ID:</span>
+                                    <code className="text-xs font-mono px-1 py-0.5 bg-muted rounded">
+                                      {org.id}
+                                    </code>
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                variant={selectedOrgId === org.id ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setSelectedOrgId(org.id)}
+                              >
+                                {selectedOrgId === org.id ? 'Selected' : 'Select'}
+                              </Button>
+                            </div>
+                            
                             {org.is_owner && (
-                              <Crown className="w-4 h-4 ml-2 text-yellow-500" />
+                              <div className="pt-2 border-t">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full justify-start text-muted-foreground hover:text-foreground"
+                                  onClick={() => {
+                                    setSelectedOrgId(org.id)
+                                    setNewOrgName(org.name)
+                                    setIsEditingOrgName(true)
+                                  }}
+                                >
+                                  <Pencil className="w-4 h-4 mr-2" />
+                                  Edit Organization
+                                </Button>
+                              </div>
                             )}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {org.is_owner ? 'Owner' : 'Member'}
-                          </p>
-                          <div className="text-xs text-muted-foreground font-mono mt-1">
-                            ID: {org.id}
                           </div>
                         </div>
-                        <div className="space-x-2">
-                          <Button
-                            variant={selectedOrgId === org.id ? "default" : "outline"}
-                            onClick={() => setSelectedOrgId(org.id)}
-                          >
-                            {selectedOrgId === org.id ? 'Selected' : 'Select'}
-                          </Button>
-                          {org.is_owner && (
-                            <Button
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedOrgId(org.id)
-                                setNewOrgName(org.name)
-                                setIsEditingOrgName(true)
-                              }}
-                            >
-                              Edit Name
-                            </Button>
-                          )}
-                        </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                {selectedOrgId && (
-                  <>
-                    <div className="space-y-4">
-                      <h3 className="font-semibold">Organization Members</h3>
-                      <div className="space-y-4">
-                        {members.map((member) => (
-                          <div 
-                            key={member.user_id}
-                            className="flex items-center justify-between p-4 rounded-lg border bg-card"
-                          >
-                            <div className="flex items-center space-x-4">
+                    {selectedOrgId && (
+                      <div className="space-y-4 pt-6 border-t">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-lg">Organization Members</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {members.length} {members.length === 1 ? 'member' : 'members'}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {members.map((member) => (
+                            <div 
+                              key={member.user_id}
+                              className="flex items-center space-x-4 p-3 rounded-lg border bg-card"
+                            >
                               <Avatar className="w-10 h-10">
                                 <AvatarImage src={member.profile.avatar_url ?? undefined} />
                                 <AvatarFallback className="bg-muted">
                                   <User className="h-5 w-5 text-muted-foreground" />
                                 </AvatarFallback>
                               </Avatar>
-                              <div>
-                                <div className="font-medium flex items-center">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium truncate flex items-center">
                                   {member.profile.name || member.profile.email}
                                   {member.is_owner && (
-                                    <Crown className="w-4 h-4 ml-2 text-yellow-500" />
+                                    <Crown className="w-4 h-4 ml-2 text-yellow-500 flex-shrink-0" />
                                   )}
                                 </div>
                                 <div className="text-sm text-muted-foreground">
@@ -636,61 +662,130 @@ export default function SettingsPage() {
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
 
-                        {isLoading && (
-                          <div className="flex justify-center p-4">
-                            <Loader2 className="h-6 w-6 animate-spin" />
-                          </div>
-                        )}
+                          {isLoading && (
+                            <div className="col-span-2 flex justify-center p-4">
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                            </div>
+                          )}
 
-                        {!isLoading && members.length === 0 && (
-                          <div className="text-center text-muted-foreground p-4">
-                            No members found
-                          </div>
-                        )}
+                          {!isLoading && members.length === 0 && (
+                            <div className="col-span-2 text-center text-muted-foreground p-4 border rounded-lg">
+                              No members found in this organization
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="join" className="space-y-4">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Organization ID</Label>
+                        <div className="flex space-x-2">
+                          <Input
+                            placeholder="Enter organization ID"
+                            value={newTenantId}
+                            onChange={(e) => setNewTenantId(e.target.value)}
+                            disabled={isJoiningOrg}
+                          />
+                          <Button
+                            onClick={handleJoinOrganization}
+                            disabled={isJoiningOrg || !newTenantId.trim()}
+                          >
+                            {isJoiningOrg ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Joining...
+                              </>
+                            ) : (
+                              'Join'
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Ask the organization owner for their Organization ID to join their organization.
+                        </p>
                       </div>
                     </div>
-                  </>
-                )}
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
 
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>Join Another Organization</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Organization ID</Label>
-                  <div className="flex space-x-2">
+            {/* Add Edit Organization Dialog */}
+            <Dialog open={isEditingOrgName} onOpenChange={setIsEditingOrgName}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Organization</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="org-name">Organization Name</Label>
                     <Input
-                      placeholder="Enter organization ID"
-                      value={newTenantId}
-                      onChange={(e) => setNewTenantId(e.target.value)}
-                      disabled={isJoiningOrg}
+                      id="org-name"
+                      value={newOrgName}
+                      onChange={(e) => setNewOrgName(e.target.value)}
+                      placeholder="Enter organization name"
                     />
-                    <Button
-                      onClick={handleJoinOrganization}
-                      disabled={isJoiningOrg || !newTenantId.trim()}
-                    >
-                      {isJoiningOrg ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Joining...
-                        </>
-                      ) : (
-                        'Join'
-                      )}
-                    </Button>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Ask the organization owner for their Organization ID to join their organization.
-                  </p>
                 </div>
-              </CardContent>
-            </Card>
+                <DialogFooter className="mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsEditingOrgName(false)
+                      setNewOrgName('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      if (!selectedOrgId || !newOrgName.trim()) return
+                      
+                      try {
+                        const { error } = await supabase
+                          .from('tenants')
+                          .update({ name: newOrgName.trim() })
+                          .eq('id', selectedOrgId)
+
+                        if (error) throw error
+
+                        // Update local state
+                        setOrganizations(orgs => 
+                          orgs.map(org => 
+                            org.id === selectedOrgId 
+                              ? { ...org, name: newOrgName.trim() }
+                              : org
+                          )
+                        )
+
+                        setIsEditingOrgName(false)
+                        setNewOrgName('')
+
+                        toast({
+                          title: "Organization updated",
+                          description: "The organization name has been updated successfully.",
+                        })
+                      } catch (error) {
+                        console.error('Error updating organization:', error)
+                        toast({
+                          title: "Error updating organization",
+                          description: "There was an error updating the organization name. Please try again.",
+                          variant: "destructive",
+                        })
+                      }
+                    }}
+                    disabled={!newOrgName.trim()}
+                  >
+                    Save Changes
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </main>
