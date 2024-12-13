@@ -32,6 +32,7 @@ interface UserTenant {
   tenants: {
     id: string
     name: string
+    avatar_url: string | null
   }
 }
 
@@ -58,6 +59,7 @@ export default function SettingsPage() {
     id: string;
     name: string;
     is_owner: boolean;
+    avatar_url: string | null;
   }>>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -92,7 +94,8 @@ export default function SettingsPage() {
               is_owner,
               tenants (
                 id,
-                name
+                name,
+                avatar_url
               )
             `)
             .eq('user_id', session.user.id) as { data: UserTenant[] | null, error: PostgrestError }
@@ -103,7 +106,8 @@ export default function SettingsPage() {
             const orgs = userTenants.map(ut => ({
               id: ut.tenant_id,
               name: ut.tenants.name,
-              is_owner: ut.is_owner
+              is_owner: ut.is_owner,
+              avatar_url: ut.tenants.avatar_url
             }))
             setOrganizations(orgs)
             
@@ -580,22 +584,30 @@ export default function SettingsPage() {
                         >
                           <div className="space-y-4">
                             <div className="flex items-start justify-between">
-                              <div className="space-y-1">
-                                <h3 className="font-medium flex items-center text-lg">
-                                  {org.name}
-                                  {org.is_owner && (
-                                    <Crown className="w-4 h-4 ml-2 text-yellow-500" />
-                                  )}
-                                </h3>
+                              <div className="flex items-start space-x-4">
+                                <Avatar className="h-12 w-12">
+                                  <AvatarImage src={org.avatar_url ?? undefined} />
+                                  <AvatarFallback>
+                                    {org.name.slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
                                 <div className="space-y-1">
-                                  <span className="text-sm text-muted-foreground">
-                                    {org.is_owner ? 'Owner' : 'Member'}
-                                  </span>
-                                  <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                                    <span>Organization ID:</span>
-                                    <code className="text-xs font-mono px-1 py-0.5 bg-muted rounded">
-                                      {org.id}
-                                    </code>
+                                  <h3 className="font-medium flex items-center text-lg">
+                                    {org.name}
+                                    {org.is_owner && (
+                                      <Crown className="w-4 h-4 ml-2 text-yellow-500" />
+                                    )}
+                                  </h3>
+                                  <div className="space-y-1">
+                                    <span className="text-sm text-muted-foreground">
+                                      {org.is_owner ? 'Owner' : 'Member'}
+                                    </span>
+                                    <div className="flex items-center space-x-1 text-sm text-muted-foreground">
+                                      <span>Organization ID:</span>
+                                      <code className="text-xs font-mono px-1 py-0.5 bg-muted rounded">
+                                        {org.id}
+                                      </code>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -721,7 +733,122 @@ export default function SettingsPage() {
                 <DialogHeader>
                   <DialogTitle>Edit Organization</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  <div className="flex items-center space-x-6">
+                    <Avatar className="h-24 w-24">
+                      <AvatarImage 
+                        src={organizations.find(org => org.id === selectedOrgId)?.avatar_url ?? undefined}
+                      />
+                      <AvatarFallback>
+                        {newOrgName.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col space-y-3">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        disabled={uploading}
+                        onClick={() => document.getElementById('org-avatar-upload')?.click()}
+                        className="w-[140px]"
+                      >
+                        {uploading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          'Change Picture'
+                        )}
+                      </Button>
+                      <input
+                        type="file"
+                        id="org-avatar-upload"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={async (event) => {
+                          try {
+                            setUploading(true)
+                            const file = event.target.files?.[0]
+                            if (!file || !selectedOrgId) return
+
+                            const fileExt = file.name.split('.').pop()
+                            const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
+                            const filePath = `${selectedOrgId}/${fileName}`
+
+                            // First check if there's an existing avatar to remove
+                            const currentOrg = organizations.find(org => org.id === selectedOrgId)
+                            if (currentOrg?.avatar_url) {
+                              const oldPath = currentOrg.avatar_url.split('/').slice(-2).join('/')
+                              try {
+                                await supabase.storage
+                                  .from('org-avatars')
+                                  .remove([oldPath])
+                              } catch (error) {
+                                console.error('Error removing old avatar:', error)
+                              }
+                            }
+
+                            // Upload new file
+                            const { error: uploadError, data } = await supabase.storage
+                              .from('org-avatars')
+                              .upload(filePath, file, {
+                                cacheControl: '3600',
+                                upsert: false
+                              })
+
+                            if (uploadError) {
+                              console.error('Upload error details:', uploadError)
+                              throw new Error(`Upload failed: ${uploadError.message}`)
+                            }
+
+                            // Get public URL
+                            const { data: { publicUrl } } = supabase.storage
+                              .from('org-avatars')
+                              .getPublicUrl(filePath)
+
+                            // Update tenant record
+                            const { error: updateError } = await supabase
+                              .from('tenants')
+                              .update({ avatar_url: publicUrl })
+                              .eq('id', selectedOrgId)
+
+                            if (updateError) {
+                              console.error('Update error details:', updateError)
+                              throw new Error(`Database update failed: ${updateError.message}`)
+                            }
+
+                            // Update local state
+                            setOrganizations(orgs =>
+                              orgs.map(org =>
+                                org.id === selectedOrgId
+                                  ? { ...org, avatar_url: publicUrl }
+                                  : org
+                              )
+                            )
+
+                            toast({
+                              title: "Success",
+                              description: "Organization avatar updated successfully",
+                            })
+                          } catch (error) {
+                            console.error('Error uploading avatar:', error)
+                            toast({
+                              title: "Error",
+                              description: error instanceof Error ? error.message : "There was an error uploading the avatar",
+                              variant: "destructive",
+                            })
+                          } finally {
+                            setUploading(false)
+                          }
+                        }}
+                        disabled={uploading}
+                      />
+                      <p className="text-[13px] text-muted-foreground">
+                        JPG, GIF or PNG. Max size of 2MB.
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="org-name">Organization Name</Label>
                     <Input

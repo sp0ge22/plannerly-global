@@ -41,10 +41,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Not authorized for this organization' }, { status: 403 })
     }
 
-    // Get the tenant name
+    // Get the tenant name and avatar
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('name')
+      .select('name, avatar_url')
       .eq('id', targetTenantId)
       .single()
 
@@ -70,10 +70,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Add tenant name to the response
+    // Add tenant name and avatar to the response
     const taskWithTenant = {
       ...data[0],
       tenant_name: tenant.name,
+      tenant_avatar_url: tenant.avatar_url,
       comments: []
     }
 
@@ -166,18 +167,21 @@ export async function GET() {
     const uniqueTenantIds = Array.from(new Set(tasks.map(t => t.tenant_id)))
     const { data: tenants, error: tenantsError } = await supabase
       .from('tenants')
-      .select('id, name')
+      .select('id, name, avatar_url')
       .in('id', uniqueTenantIds)
 
     if (tenantsError) {
       console.error('Error fetching tenant names:', tenantsError)
     }
 
-    // Create a map of tenant IDs to names
+    // Create a map of tenant IDs to names and avatars
     const tenantMap = (tenants || []).reduce((acc, tenant) => {
-      acc[tenant.id] = tenant.name
+      acc[tenant.id] = {
+        name: tenant.name,
+        avatar_url: tenant.avatar_url
+      }
       return acc
-    }, {} as Record<string, string>)
+    }, {} as Record<string, { name: string, avatar_url: string | null }>)
 
     // Fetch comments for the retrieved tasks
     const { data: comments, error: commentsError } = await supabase
@@ -193,7 +197,8 @@ export async function GET() {
 
     const tasksWithCommentsAndTenants = tasks.map(task => ({
       ...task,
-      tenant_name: tenantMap[task.tenant_id] || 'Unknown Organization',
+      tenant_name: tenantMap[task.tenant_id]?.name || 'Unknown Organization',
+      tenant_avatar_url: tenantMap[task.tenant_id]?.avatar_url || null,
       comments: comments?.filter(comment => comment.task_id === task.id) || []
     }))
 

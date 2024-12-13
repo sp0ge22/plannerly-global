@@ -8,6 +8,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const formatDate = (dateString: string) => {
   try {
@@ -121,8 +122,15 @@ export function TaskCard({
                   </Badge>
                 </div>
                 <div className="flex items-center text-sm text-gray-600">
-                  <Building2 className="w-4 h-4 mr-1" />
-                  <span className="truncate">{task.tenant_name || 'Unknown Organization'}</span>
+                  <div className="flex items-center space-x-2">
+                    <Avatar className="h-5 w-5">
+                      <AvatarImage src={task.tenant_avatar_url ?? undefined} />
+                      <AvatarFallback className="text-xs">
+                        {(task.tenant_name || 'Unknown Organization').slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate">{task.tenant_name || 'Unknown Organization'}</span>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="flex flex-col bg-gray-50 p-2 rounded">

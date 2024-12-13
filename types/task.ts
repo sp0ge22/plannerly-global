@@ -22,5 +22,6 @@ export interface Task {
   comments: Comment[];
   tenant_id: string;
   tenant_name?: string;
+  tenant_avatar_url?: string;
   archived: boolean;
 }

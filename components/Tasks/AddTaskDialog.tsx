@@ -15,10 +15,12 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 type Tenant = {
   id: string
   name: string
+  avatar_url?: string
 }
 
 type UserTenantResponse = {
@@ -58,7 +60,8 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
             tenant_id,
             tenants:tenant_id (
               id,
-              name
+              name,
+              avatar_url
             )
           `)
           .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
@@ -217,12 +220,34 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
               onValueChange={(value) => setNewTask({ ...newTask, tenant_id: value })}
             >
               <SelectTrigger id="tenant-select" className="w-full">
-                <SelectValue placeholder="Select organization" />
+                <SelectValue placeholder="Select organization">
+                  {newTask.tenant_id && (
+                    <div className="flex items-center space-x-2">
+                      <Avatar className="h-5 w-5">
+                        <AvatarImage 
+                          src={tenants.find(t => t.id === newTask.tenant_id)?.avatar_url ?? undefined}
+                        />
+                        <AvatarFallback className="text-xs">
+                          {(tenants.find(t => t.id === newTask.tenant_id)?.name || '??').slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span>{tenants.find(t => t.id === newTask.tenant_id)?.name}</span>
+                    </div>
+                  )}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {tenants.map((tenant) => (
                   <SelectItem key={tenant.id} value={tenant.id}>
-                    {tenant.name}
+                    <div className="flex items-center space-x-2">
+                      <Avatar className="h-5 w-5">
+                        <AvatarImage src={tenant.avatar_url ?? undefined} />
+                        <AvatarFallback className="text-xs">
+                          {tenant.name.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span>{tenant.name}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
