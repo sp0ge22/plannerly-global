@@ -1,9 +1,13 @@
 export interface Comment {
   id: number;
-  task_id: number;
   author: string;
   text: string;
   created_at: string;
+  user_id: string;
+  profile: {
+    avatar_url: string | null;
+    name: string | null;
+  } | null;
 }
 
 export interface Task {
@@ -11,10 +15,11 @@ export interface Task {
   title: string;
   body: string;
   status: 'To Do' | 'In Progress' | 'Done';
-  assignee: string;
   priority: 'Low' | 'Medium' | 'High';
-  comments: Comment[]; // Ensure this is required and always definedI
+  assignee: string;
   created_at: string;
-  due: string | null;  // Add this line
+  due: string | null;
+  comments: Comment[];
+  tenant_id: string;
   archived: boolean;
 }

@@ -52,9 +52,15 @@ export async function POST(request: Request, { params }: { params: { id: string 
         text,
         author,
         user_id: session.user.id,
-        tenant_id: taskCheck.tenant_id // Use the task's tenant_id
+        tenant_id: taskCheck.tenant_id
       }])
-      .select()
+      .select(`
+        *,
+        profile:user_id (
+          avatar_url,
+          name
+        )
+      `)
       .single()
 
     if (commentError) {

@@ -6,11 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { UserCircle, Calendar, MessageSquare, Send, Clock, Edit2, X, Loader2, Wand2 } from 'lucide-react'
+import { UserCircle, Calendar, MessageSquare, Send, Clock, Edit2, X, Loader2, Wand2, User } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Task } from '@/types/task'
+import { Task, Comment } from '@/types/task'
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 interface TaskDetailsDialogProps {
   task: Task
@@ -493,8 +494,13 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
                           >
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center space-x-2">
-                                <UserCircle className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                                <p className="font-medium text-sm truncate">{comment.author}</p>
+                                <Avatar className="h-6 w-6">
+                                  <AvatarImage src={comment.profile?.avatar_url ?? undefined} />
+                                  <AvatarFallback className="bg-muted">
+                                    <User className="h-3 w-3 text-muted-foreground" />
+                                  </AvatarFallback>
+                                </Avatar>
+                                <p className="font-medium text-sm truncate">{comment.profile?.name || comment.author}</p>
                               </div>
                               <p className="text-xs text-gray-500 flex items-center flex-shrink-0">
                                 <Calendar className="w-3 h-3 mr-1" />
