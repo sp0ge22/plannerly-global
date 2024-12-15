@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Menu, X } from 'lucide-react'
+import { Bell, Menu, X, ChevronDown, Check } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from 'next/link'
@@ -8,9 +8,10 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Settings, Users } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { cn } from "@/lib/utils"
 
 export function Header() {
   const router = useRouter()
@@ -21,6 +22,16 @@ export function Header() {
   const [isLoading, setIsLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [organizations, setOrganizations] = useState<Array<{
+    id: string;
+    name: string;
+    avatar_url: string | null;
+  }>>([])
+  const [currentOrg, setCurrentOrg] = useState<{
+    id: string;
+    name: string;
+    avatar_url: string | null;
+  } | null>(null)
 
   useEffect(() => {
     const checkAuthAndLoadProfile = async () => {
@@ -29,18 +40,54 @@ export function Header() {
         setIsAuthenticated(!!session)
 
         if (session?.user) {
-          const { data, error } = await supabase
+          const { data: profileData, error } = await supabase
             .from('profiles')
             .select('avatar_color, avatar_letter, is_admin, avatar_url')
             .eq('id', session.user.id)
             .single()
 
-          if (!error && data) {
-            setAvatarColor(data.avatar_color || 'bg-red-600')
-            setAvatarLetter(data.avatar_letter || 'U')
-            setIsAdmin(data.is_admin || false)
-            if (data.avatar_url) {
-              localStorage.setItem('avatarUrl', data.avatar_url)
+          if (!error && profileData) {
+            setAvatarColor(profileData.avatar_color || 'bg-red-600')
+            setAvatarLetter(profileData.avatar_letter || 'U')
+            setIsAdmin(profileData.is_admin || false)
+            if (profileData.avatar_url) {
+              localStorage.setItem('avatarUrl', profileData.avatar_url)
+            }
+          }
+
+          // Fetch user's organizations
+          const { data: userTenants, error: tenantError } = await supabase
+            .from('user_tenants')
+            .select(`
+              tenant_id,
+              tenants:tenant_id (
+                id,
+                name,
+                avatar_url
+              )
+            `)
+            .eq('user_id', session.user.id)
+
+          if (!tenantError && userTenants) {
+            const orgs = userTenants
+              .map(ut => ut.tenants)
+              .filter((tenant): tenant is { id: string; name: string; avatar_url: string | null } => 
+                tenant !== null && 
+                'id' in tenant && 
+                'name' in tenant
+              )
+
+            setOrganizations(orgs)
+            
+            // Set first org as current if none selected
+            const savedOrgId = localStorage.getItem('currentOrgId')
+            const initialOrg = savedOrgId 
+              ? orgs.find(org => org.id === savedOrgId)
+              : orgs[0]
+
+            if (initialOrg) {
+              setCurrentOrg(initialOrg)
+              localStorage.setItem('currentOrgId', initialOrg.id)
             }
           }
         }
@@ -105,17 +152,81 @@ export function Header() {
       <div className="flex items-center justify-between px-4 py-4 md:px-6">
         {/* Logo and Navigation Container */}
         <div className="flex items-center flex-1">
-          <Link href="/home" className="flex items-center space-x-2 mr-8">
-            <Image
-              src="https://i.imgur.com/SvnWJ0L.png"
-              alt="Business Dashboard Logo"
-              width={45}
-              height={45}
-              className="relative object-contain rounded-full"
-              priority
-            />
-            <h1 className="text-xl md:text-2xl font-bold">Business Dashboard</h1>
-          </Link>
+          {currentOrg ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  className="flex items-center space-x-3 mr-8 px-2 hover:bg-white/10"
+                >
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={currentOrg.avatar_url ?? undefined} />
+                    <AvatarFallback>
+                      {currentOrg.name.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex items-center">
+                    <span className="text-lg font-semibold">{currentOrg.name}</span>
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[200px]">
+                <DropdownMenuLabel className="text-foreground">Switch Organization</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {organizations.map((org) => (
+                  <DropdownMenuItem
+                    key={org.id}
+                    className={cn(
+                      "flex items-center space-x-2 cursor-pointer text-foreground",
+                      currentOrg?.id === org.id && "bg-accent"
+                    )}
+                    onClick={() => {
+                      setCurrentOrg(org)
+                      localStorage.setItem('currentOrgId', org.id)
+                    }}
+                  >
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={org.avatar_url ?? undefined} />
+                      <AvatarFallback>
+                        {org.name.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span>{org.name}</span>
+                    {currentOrg?.id === org.id && (
+                      <Check className="h-4 w-4 ml-auto" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings" className="flex items-center cursor-pointer text-foreground">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Manage Organizations</span>
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : isAuthenticated && !isLoading ? (
+            <Button 
+              variant="outline" 
+              className="flex items-center space-x-2 text-white border-white hover:bg-white/10 mr-8"
+              onClick={() => router.push('/settings')}
+            >
+              <div className="flex items-center space-x-2">
+                <Settings className="h-5 w-5" />
+                <span>Set Up Organization</span>
+                <div className="flex items-center justify-center h-5 w-5 rounded-full border border-white">
+                  <span className="text-sm font-bold">!</span>
+                </div>
+              </div>
+            </Button>
+          ) : (
+            <div className="flex items-center space-x-3 mr-8">
+              <div className="h-8 w-8 bg-gray-700 rounded-full animate-pulse" />
+              <div className="h-6 w-32 bg-gray-700 rounded animate-pulse" />
+            </div>
+          )}
 
           {/* Desktop Navigation moved here */}
           <nav className="hidden md:block">

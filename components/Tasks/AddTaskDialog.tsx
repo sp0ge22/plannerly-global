@@ -28,6 +28,15 @@ type UserTenantResponse = {
   tenants: Tenant
 }
 
+type OrgUser = {
+  user_id: string
+  profile: {
+    name: string | null
+    email: string | null
+    avatar_url: string | null
+  }
+}
+
 type AddTaskDialogProps = {
   addTask: (task: Omit<Task, 'id' | 'comments' | 'created_at'>) => Promise<boolean>
   children: ReactNode
@@ -37,7 +46,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
   const [newTask, setNewTask] = useState<Omit<Task, 'id' | 'comments' | 'created_at'>>({
     title: '',
     body: '',
-    assignee: 'Ross',
+    assignee: '',
     status: 'To Do',
     priority: 'Medium',
     due: null,
@@ -45,6 +54,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
     tenant_id: ''
   })
   const [tenants, setTenants] = useState<Tenant[]>([])
+  const [orgUsers, setOrgUsers] = useState<OrgUser[]>([])
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
@@ -94,6 +104,70 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
       fetchTenants()
     }
   }, [isOpen, supabase])
+
+  useEffect(() => {
+    const fetchOrgUsers = async () => {
+      if (!newTask.tenant_id) return
+
+      // First get user_ids from user_tenants
+      const { data: userTenants, error: userTenantsError } = await supabase
+        .from('user_tenants')
+        .select('user_id')
+        .eq('tenant_id', newTask.tenant_id)
+
+      if (userTenantsError) {
+        console.error('Error fetching organization users:', userTenantsError)
+        toast({
+          title: "Error fetching users",
+          description: "Could not load organization users.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (!userTenants?.length) {
+        setOrgUsers([])
+        return
+      }
+
+      // Then get profiles for those users
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url')
+        .in('id', userTenants.map(ut => ut.user_id))
+
+      if (profilesError) {
+        console.error('Error fetching user profiles:', profilesError)
+        toast({
+          title: "Error fetching users",
+          description: "Could not load user profiles.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const users: OrgUser[] = profiles.map(profile => ({
+        user_id: profile.id,
+        profile: {
+          name: profile.name,
+          email: profile.email,
+          avatar_url: profile.avatar_url
+        }
+      }))
+
+      setOrgUsers(users)
+      
+      // Set first user as default assignee if none selected
+      if (!newTask.assignee && users.length > 0) {
+        setNewTask(prev => ({ 
+          ...prev, 
+          assignee: users[0].profile.name || users[0].profile.email || users[0].user_id 
+        }))
+      }
+    }
+
+    fetchOrgUsers()
+  }, [newTask.tenant_id, supabase])
 
   const getPriorityColor = (priority: Task['priority']) => {
     const colors = {
@@ -169,7 +243,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
         setNewTask({ 
           title: '', 
           body: '', 
-          assignee: 'Ross', 
+          assignee: '', 
           status: 'To Do', 
           priority: 'Medium', 
           due: null,
@@ -393,16 +467,50 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
             <Label htmlFor="new-assignee" className="text-sm font-medium">Assignee</Label>
             <Select
               value={newTask.assignee}
-              onValueChange={(value: Task['assignee']) => setNewTask({ ...newTask, assignee: value })}
+              onValueChange={(value: string) => setNewTask({ ...newTask, assignee: value })}
             >
               <SelectTrigger id="new-assignee" className="w-full">
-                <SelectValue placeholder="Select assignee" />
+                <SelectValue placeholder="Select assignee">
+                  {newTask.assignee && (
+                    <div className="flex items-center space-x-2">
+                      <Avatar className="h-5 w-5">
+                        <AvatarImage 
+                          src={orgUsers.find(u => 
+                            (u.profile.name === newTask.assignee || 
+                             u.profile.email === newTask.assignee ||
+                             u.user_id === newTask.assignee)
+                          )?.profile.avatar_url ?? undefined} 
+                        />
+                        <AvatarFallback>
+                          {newTask.assignee.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span>{newTask.assignee}</span>
+                    </div>
+                  )}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Ross">Ross</SelectItem>
-                <SelectItem value="Brian">Brian</SelectItem>
-                <SelectItem value="Spencer">Spencer</SelectItem>
-                <SelectItem value="Tommy">Tommy</SelectItem>
+                {orgUsers.map((user) => (
+                  <SelectItem 
+                    key={user.user_id} 
+                    value={user.profile.name || user.profile.email || user.user_id}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <Avatar className="h-5 w-5">
+                        <AvatarImage src={user.profile.avatar_url ?? undefined} />
+                        <AvatarFallback>
+                          {(user.profile.name || user.profile.email || user.user_id)
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span>
+                        {user.profile.name || user.profile.email || user.user_id}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

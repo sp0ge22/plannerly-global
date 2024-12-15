@@ -17,6 +17,8 @@ export interface Task {
   status: 'To Do' | 'In Progress' | 'Done';
   priority: 'Low' | 'Medium' | 'High';
   assignee: string;
+  assignee_avatar_url?: string | null;
+  assignee_id?: string;
   created_at: string;
   due: string | null;
   comments: Comment[];

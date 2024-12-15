@@ -53,6 +53,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Could not fetch organization details' }, { status: 500 })
     }
 
+    // Get assignee profile
+    const { data: assigneeProfile, error: assigneeError } = await supabase
+      .from('profiles')
+      .select('id, avatar_url')
+      .eq('name', task.assignee)
+      .single()
+
+    if (assigneeError) {
+      console.error('Error fetching assignee profile:', assigneeError)
+    }
+
+    console.log('Found assignee profile:', assigneeProfile);
+
     const { data, error } = await supabase
       .from('tasks')
       .insert([{ 
@@ -70,15 +83,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Add tenant name and avatar to the response
-    const taskWithTenant = {
+    // Add tenant and assignee information to the response
+    const taskWithDetails = {
       ...data[0],
       tenant_name: tenant.name,
       tenant_avatar_url: tenant.avatar_url,
+      assignee_avatar_url: assigneeProfile?.avatar_url || null,
+      assignee_id: assigneeProfile?.id || null,
       comments: []
     }
 
-    return NextResponse.json(taskWithTenant)
+    return NextResponse.json(taskWithDetails)
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 })
@@ -174,6 +189,34 @@ export async function GET() {
       console.error('Error fetching tenant names:', tenantsError)
     }
 
+    // Get assignee profiles
+    const uniqueAssignees = Array.from(new Set(tasks.map(t => t.assignee)))
+    console.log('Unique assignees:', uniqueAssignees);
+
+    const { data: assigneeProfiles, error: assigneeError } = await supabase
+      .from('profiles')
+      .select('id, name, email, avatar_url')
+      .in('name', uniqueAssignees)
+
+    if (assigneeError) {
+      console.error('Error fetching assignee profiles:', assigneeError)
+    }
+
+    console.log('Assignee profiles found:', assigneeProfiles);
+
+    // Create a map of assignee names to profiles
+    const assigneeMap = (assigneeProfiles || []).reduce((acc, profile) => {
+      if (profile.name) {
+        acc[profile.name] = {
+          id: profile.id,
+          avatar_url: profile.avatar_url
+        }
+      }
+      return acc
+    }, {} as Record<string, { id: string, avatar_url: string | null }>)
+
+    console.log('Assignee map:', assigneeMap);
+
     // Create a map of tenant IDs to names and avatars
     const tenantMap = (tenants || []).reduce((acc, tenant) => {
       acc[tenant.id] = {
@@ -199,6 +242,8 @@ export async function GET() {
       ...task,
       tenant_name: tenantMap[task.tenant_id]?.name || 'Unknown Organization',
       tenant_avatar_url: tenantMap[task.tenant_id]?.avatar_url || null,
+      assignee_avatar_url: assigneeMap[task.assignee]?.avatar_url || null,
+      assignee_id: assigneeMap[task.assignee]?.id || null,
       comments: comments?.filter(comment => comment.task_id === task.id) || []
     }))
 

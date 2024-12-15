@@ -91,6 +91,13 @@ export function TaskCard({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [pin, setPin] = useState('');
 
+  // Add debug logging
+  console.log('Task assignee data:', {
+    assignee: task.assignee,
+    assignee_avatar_url: task.assignee_avatar_url,
+    assignee_id: task.assignee_id
+  });
+
   const handleDelete = async () => {
     const success = await deleteTask(task.id, pin);
     if (success) {
@@ -112,9 +119,14 @@ export function TaskCard({
               <h3 className="font-semibold mb-2">{task.title}</h3>
               <div className="flex flex-col space-y-2 mb-3">
                 <div className="flex items-center justify-between text-sm text-gray-600">
-                  <span className="flex items-center">
-                    <UserCircle className="w-4 h-4 mr-1" />
-                    {task.assignee}
+                  <span className="flex items-center space-x-2">
+                    <Avatar className="h-5 w-5">
+                      <AvatarImage src={task.assignee_avatar_url ?? undefined} />
+                      <AvatarFallback className="text-xs">
+                        {task.assignee.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span>{task.assignee}</span>
                   </span>
                   <Badge variant="outline" className={`${getPriorityColor(task.priority)} text-xs px-2 py-0.5 flex items-center`}>
                     <Flag className="w-3 h-3 mr-1" />
