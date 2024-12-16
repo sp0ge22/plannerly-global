@@ -1,41 +1,196 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Mail, Wand2, RefreshCw, MessageSquare } from 'lucide-react'
+import { Loader2, Mail, Wand2, RefreshCw, MessageSquare, Plus, Trash2 } from 'lucide-react'
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
-type EmailType = 'new-customer' | 'warranty' | 'general'
-type RewriteStyle = 'professional' | 'casual' | 'concise' | 'detailed' | 'custom'
+type EmailType = 'response' | 'rewrite'
+type Tenant = {
+  id: string
+  name: string
+  avatar_url?: string | null
+}
+
+type TenantResponse = {
+  tenant_id: string
+  tenants: Tenant | null
+}
+
+type EmailPrompt = {
+  id: string
+  title: string
+  prompt: string
+  type: EmailType
+  tenant_id: string
+  created_by: string
+  tenant: {
+    name: string
+    avatar_url: string | null
+  }
+  creator: {
+    name: string
+    avatar_url: string | null
+  }
+}
 
 export default function EmailAssistantPage() {
   const [inputText, setInputText] = useState('')
   const [outputText, setOutputText] = useState('')
   const [refinementText, setRefinementText] = useState('')
-  const [emailType, setEmailType] = useState<EmailType>('general')
-  const [rewriteStyle, setRewriteStyle] = useState<RewriteStyle>('professional')
-  const [customPrompt, setCustomPrompt] = useState('')
+  const [selectedTenant, setSelectedTenant] = useState<string>('')
+  const [selectedPrompt, setSelectedPrompt] = useState<string>('')
+  const [mode, setMode] = useState<EmailType>('response')
   const [isGenerating, setIsGenerating] = useState(false)
-  const [mode, setMode] = useState<'respond' | 'rewrite'>('respond')
+  const [tenants, setTenants] = useState<Tenant[]>([])
+  const [prompts, setPrompts] = useState<EmailPrompt[]>([])
+  const [isAddingPrompt, setIsAddingPrompt] = useState(false)
+  const [newPrompt, setNewPrompt] = useState({
+    title: '',
+    prompt: '',
+    type: 'response' as EmailType,
+    tenant_id: ''
+  })
+  
   const { toast } = useToast()
+  const supabase = createClientComponentClient()
 
-  const responsePrompts = {
-    'new-customer': "You are responding as Freestyle Distribution, the North American distributor of Root Industries scooters. Write a professional and welcoming email response to this customer inquiry. Be friendly yet professional. Only write the body of the email, no greeting or signature. Here's the email to respond to:",
-    'warranty': "You are responding as Freestyle Distribution, the North American distributor of Root Industries scooters. Write a professional email response regarding this warranty claim. Be helpful and understanding while explaining the warranty process. Only write the body of the email, no greeting or signature. Here's the email to respond to:",
-    'general': "You are responding as Freestyle Distribution, the North American distributor of Root Industries scooters. Write a professional email response. Only write the body of the email, no greeting or signature. Here's the email to respond to:"
+  useEffect(() => {
+    const fetchTenants = async () => {
+      const { data: userTenants, error } = await supabase
+        .from('user_tenants')
+        .select(`
+          tenant_id,
+          tenants:tenant_id (
+            id,
+            name,
+            avatar_url
+          )
+        `)
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .returns<TenantResponse[]>()
+
+      if (error) {
+        console.error('Error fetching tenants:', error)
+        toast({
+          title: "Error fetching organizations",
+          description: "Could not load your organizations.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const fetchedTenants = userTenants
+        .map(ut => ut.tenants)
+        .filter((tenant): tenant is Tenant => 
+          tenant !== null && 
+          typeof tenant === 'object' &&
+          'id' in tenant &&
+          'name' in tenant
+        )
+
+      setTenants(fetchedTenants)
+      if (fetchedTenants.length > 0 && !selectedTenant) {
+        setSelectedTenant(fetchedTenants[0].id)
+        setNewPrompt(prev => ({ ...prev, tenant_id: fetchedTenants[0].id }))
+      }
+    }
+
+    fetchTenants()
+  }, [supabase, selectedTenant])
+
+  useEffect(() => {
+    const fetchPrompts = async () => {
+      const response = await fetch('/api/email-prompts')
+      if (!response.ok) {
+        toast({
+          title: "Error fetching prompts",
+          description: "Could not load email prompts.",
+          variant: "destructive",
+        })
+        return
+      }
+      const data = await response.json()
+      setPrompts(data)
+    }
+
+    fetchPrompts()
+  }, [])
+
+  const handleAddPrompt = async () => {
+    if (!newPrompt.title || !newPrompt.prompt || !newPrompt.tenant_id) {
+      toast({
+        title: "Missing fields",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('/api/email-prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPrompt),
+      })
+
+      if (!response.ok) throw new Error('Failed to create prompt')
+
+      const data = await response.json()
+      setPrompts([data, ...prompts])
+      setIsAddingPrompt(false)
+      setNewPrompt({
+        title: '',
+        prompt: '',
+        type: 'response',
+        tenant_id: selectedTenant
+      })
+
+      toast({
+        title: "Prompt created",
+        description: "Your new email prompt has been created.",
+      })
+    } catch (error) {
+      console.error('Error creating prompt:', error)
+      toast({
+        title: "Error creating prompt",
+        description: "Could not create the email prompt.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const rewritePrompts = {
-    'professional': "Rewrite this email to sound more professional and polished while maintaining the core message. Improve clarity and formal tone. Do not include subject line or signature - only provide the body text:",
-    'casual': "Clean up and improve this email while keeping a casual, friendly tone. Fix any errors and make it flow better. Do not include subject line or signature - only provide the body text:",
-    'concise': "Rewrite this email to be more concise and to-the-point while maintaining professionalism. Remove unnecessary words and streamline the message. Do not include subject line or signature - only provide the body text:",
-    'detailed': "Enhance this email with more detailed information and thorough explanations while maintaining professionalism. Expand on key points. Do not include subject line or signature - only provide the body text:",
-    'custom': "" // Will be replaced by customPrompt
+  const handleDeletePrompt = async (id: string) => {
+    try {
+      const response = await fetch('/api/email-prompts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+
+      if (!response.ok) throw new Error('Failed to delete prompt')
+
+      setPrompts(prompts.filter(p => p.id !== id))
+      toast({
+        title: "Prompt deleted",
+        description: "The email prompt has been deleted.",
+      })
+    } catch (error) {
+      console.error('Error deleting prompt:', error)
+      toast({
+        title: "Error deleting prompt",
+        description: "Could not delete the email prompt.",
+        variant: "destructive",
+      })
+    }
   }
 
   const generateEmail = async () => {
@@ -48,18 +203,24 @@ export default function EmailAssistantPage() {
       return
     }
 
+    if (!selectedPrompt && mode === 'response') {
+      toast({
+        title: "Prompt required",
+        description: "Please select an email prompt.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsGenerating(true)
     try {
+      const selectedPromptData = prompts.find(p => p.id === selectedPrompt)
       const response = await fetch('/api/generate-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           text: inputText,
-          prompt: mode === 'respond' 
-            ? responsePrompts[emailType]
-            : rewriteStyle === 'custom' 
-              ? customPrompt 
-              : rewritePrompts[rewriteStyle]
+          prompt: selectedPromptData?.prompt || ''
         }),
       })
 
@@ -97,9 +258,7 @@ export default function EmailAssistantPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           text: `Original email: "${outputText}"\n\nPlease modify this email with the following changes: ${refinementText}`,
-          prompt: mode === 'respond'
-            ? "You are responding as Freestyle Distribution, the North American distributor of Root Industries scooters. Rewrite this email with the requested changes. Only provide the new body text, no greeting or signature."
-            : "Rewrite this email with the requested changes while maintaining appropriate tone and clarity."
+          prompt: "Rewrite this email with the requested changes while maintaining appropriate tone and clarity."
         }),
       })
 
@@ -120,13 +279,23 @@ export default function EmailAssistantPage() {
     }
   }
 
+  const filteredPrompts = selectedTenant
+    ? prompts.filter(p => p.tenant_id === selectedTenant && p.type === mode)
+    : []
+
   return (
     <div className="flex flex-col min-h-screen bg-neutral-50">
       <main className="flex-1 p-6">
         <div className="max-w-4xl mx-auto space-y-6">
-          <div className="flex items-center space-x-2">
-            <Mail className="w-6 h-6" />
-            <h1 className="text-3xl font-bold">Email Assistant</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Mail className="w-6 h-6" />
+              <h1 className="text-3xl font-bold">Email Assistant</h1>
+            </div>
+            <Button onClick={() => setIsAddingPrompt(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Prompt
+            </Button>
           </div>
 
           <Card>
@@ -136,8 +305,11 @@ export default function EmailAssistantPage() {
             <CardContent className="space-y-4">
               <div className="flex space-x-4">
                 <Button
-                  variant={mode === 'respond' ? 'default' : 'outline'}
-                  onClick={() => setMode('respond')}
+                  variant={mode === 'response' ? 'default' : 'outline'}
+                  onClick={() => {
+                    setMode('response')
+                    setSelectedPrompt('')
+                  }}
                   className="flex-1"
                 >
                   <MessageSquare className="w-4 h-4 mr-2" />
@@ -145,7 +317,10 @@ export default function EmailAssistantPage() {
                 </Button>
                 <Button
                   variant={mode === 'rewrite' ? 'default' : 'outline'}
-                  onClick={() => setMode('rewrite')}
+                  onClick={() => {
+                    setMode('rewrite')
+                    setSelectedPrompt('')
+                  }}
                   className="flex-1"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
@@ -153,59 +328,87 @@ export default function EmailAssistantPage() {
                 </Button>
               </div>
 
-              {mode === 'respond' ? (
-                <div className="space-y-2">
-                  <Label>Response Type</Label>
-                  <Select
-                    value={emailType}
-                    onValueChange={(value: EmailType) => setEmailType(value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select response type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="general">General Response</SelectItem>
-                      <SelectItem value="new-customer">New Customer Response</SelectItem>
-                      <SelectItem value="warranty">Warranty Response</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label>Rewrite Style</Label>
-                  <Select
-                    value={rewriteStyle}
-                    onValueChange={(value: RewriteStyle) => setRewriteStyle(value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select rewrite style" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="professional">More Professional</SelectItem>
-                      <SelectItem value="casual">Casual Clean Up</SelectItem>
-                      <SelectItem value="concise">More Concise</SelectItem>
-                      <SelectItem value="detailed">More Detailed</SelectItem>
-                      <SelectItem value="custom">Custom Prompt</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-2">
+                <Label>Organization</Label>
+                <Select
+                  value={selectedTenant}
+                  onValueChange={(value) => {
+                    setSelectedTenant(value)
+                    setSelectedPrompt('')
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select organization">
+                      {selectedTenant && (
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage 
+                              src={tenants.find(t => t.id === selectedTenant)?.avatar_url || undefined}
+                            />
+                            <AvatarFallback>
+                              {tenants.find(t => t.id === selectedTenant)?.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{tenants.find(t => t.id === selectedTenant)?.name}</span>
+                        </div>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenants.map((tenant) => (
+                      <SelectItem key={tenant.id} value={tenant.id}>
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={tenant.avatar_url || undefined} />
+                            <AvatarFallback>
+                              {tenant.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{tenant.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  {rewriteStyle === 'custom' && (
-                    <div className="space-y-2">
-                      <Label>Custom Rewrite Instructions</Label>
-                      <Input
-                        placeholder="Enter custom instructions for rewriting..."
-                        value={customPrompt}
-                        onChange={(e) => setCustomPrompt(e.target.value)}
-                      />
-                    </div>
-                  )}
+              {mode === 'response' && (
+                <div className="space-y-2">
+                  <Label>Email Prompt</Label>
+                  <Select
+                    value={selectedPrompt}
+                    onValueChange={setSelectedPrompt}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a prompt" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredPrompts.map((prompt) => (
+                        <SelectItem key={prompt.id} value={prompt.id}>
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center space-x-2">
+                              <span>{prompt.title}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-sm text-gray-500">
+                              <Avatar className="h-4 w-4">
+                                <AvatarImage src={prompt.creator.avatar_url || undefined} />
+                                <AvatarFallback>
+                                  {prompt.creator.name?.slice(0, 2).toUpperCase() || '??'}
+                                </AvatarFallback>
+                              </Avatar>
+                            </div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
               <div className="space-y-2">
-                <Label>{mode === 'respond' ? 'Original Email' : 'Email to Rewrite'}</Label>
+                <Label>{mode === 'response' ? 'Original Email' : 'Email to Rewrite'}</Label>
                 <Textarea
-                  placeholder={mode === 'respond' 
+                  placeholder={mode === 'response' 
                     ? "Paste the email you want to respond to..."
                     : "Paste the email you want to rewrite..."
                   }
@@ -217,18 +420,18 @@ export default function EmailAssistantPage() {
 
               <Button
                 onClick={generateEmail}
-                disabled={isGenerating || !inputText.trim() || (mode === 'rewrite' && rewriteStyle === 'custom' && !customPrompt.trim())}
+                disabled={isGenerating || !inputText.trim() || (mode === 'response' && !selectedPrompt)}
                 className="w-full"
               >
                 {isGenerating ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {mode === 'respond' ? 'Generating Response...' : 'Rewriting...'}
+                    {mode === 'response' ? 'Generating Response...' : 'Rewriting...'}
                   </>
                 ) : (
                   <>
                     <Wand2 className="w-4 h-4 mr-2" />
-                    {mode === 'respond' ? 'Generate Response' : 'Rewrite Email'}
+                    {mode === 'response' ? 'Generate Response' : 'Rewrite Email'}
                   </>
                 )}
               </Button>
@@ -236,7 +439,7 @@ export default function EmailAssistantPage() {
               {outputText && (
                 <>
                   <div className="space-y-2">
-                    <Label>{mode === 'respond' ? 'Generated Response' : 'Rewritten Email'}</Label>
+                    <Label>{mode === 'response' ? 'Generated Response' : 'Rewritten Email'}</Label>
                     <Textarea
                       value={outputText}
                       readOnly
@@ -289,6 +492,87 @@ export default function EmailAssistantPage() {
           </Card>
         </div>
       </main>
+
+      <Dialog open={isAddingPrompt} onOpenChange={setIsAddingPrompt}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Email Prompt</DialogTitle>
+            <DialogDescription>
+              Create a new email prompt for your organization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Title</Label>
+              <Input
+                id="title"
+                value={newPrompt.title}
+                onChange={(e) => setNewPrompt({ ...newPrompt, title: e.target.value })}
+                placeholder="Enter prompt title..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="prompt">Prompt</Label>
+              <Textarea
+                id="prompt"
+                value={newPrompt.prompt}
+                onChange={(e) => setNewPrompt({ ...newPrompt, prompt: e.target.value })}
+                placeholder="Enter the prompt text..."
+                className="min-h-[100px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="type">Type</Label>
+              <Select
+                value={newPrompt.type}
+                onValueChange={(value: EmailType) => setNewPrompt({ ...newPrompt, type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select prompt type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="response">Response</SelectItem>
+                  <SelectItem value="rewrite">Rewrite</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="organization">Organization</Label>
+              <Select
+                value={newPrompt.tenant_id}
+                onValueChange={(value) => setNewPrompt({ ...newPrompt, tenant_id: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants.map((tenant) => (
+                    <SelectItem key={tenant.id} value={tenant.id}>
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={tenant.avatar_url || undefined} />
+                          <AvatarFallback>
+                            {tenant.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{tenant.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddingPrompt(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddPrompt}>
+              Add Prompt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 
