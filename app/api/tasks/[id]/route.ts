@@ -11,6 +11,9 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const taskId = parseInt(params.id, 10)
+    const updatedTask = await request.json()
+
     // Get all tenants the user is a member of
     const { data: userTenants, error: userTenantError } = await supabase
       .from('user_tenants')
@@ -27,18 +30,12 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     }
 
     const tenantIds = userTenants.map(ut => ut.tenant_id)
-    const taskId = parseInt(params.id, 10)
-    if (isNaN(taskId)) {
-      return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 })
-    }
 
-    const updatedTask = await request.json()
-
+    // Map for status values (if needed)
     const statusMap: { [key: string]: string } = {
-      'To Do': 'To Do',
-      'In Progress': 'In Progress',
-      'Completed': 'Done',
-      'Done': 'Done'
+      'todo': 'To Do',
+      'in-progress': 'In Progress',
+      'done': 'Done'
     }
 
     // First verify the task belongs to one of the user's tenants
@@ -65,20 +62,52 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     }
 
     // Update the task using the verified tenant_id
-    const { data, error } = await supabase
+    const { data: updatedTaskData, error: updateError } = await supabase
       .from('tasks')
       .update(updateData)
       .eq('id', taskId)
       .eq('tenant_id', taskCheck.tenant_id)
-      .select('*, comments(*)')
+      .select(`
+        *,
+        comments (
+          *,
+          profile:user_id (
+            avatar_url,
+            name
+          )
+        )
+      `)
       .single()
 
-    if (error) {
-      console.error('Supabase update error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (updateError) {
+      console.error('Supabase update error:', updateError)
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
-    return NextResponse.json(data)
+    // Get tenant information
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('name, avatar_url')
+      .eq('id', taskCheck.tenant_id)
+      .single()
+
+    // Get assignee profile information
+    const { data: assigneeProfile } = await supabase
+      .from('profiles')
+      .select('id, name, avatar_url')
+      .eq('name', updatedTaskData.assignee)
+      .single()
+
+    // Combine all the data
+    const fullTaskData = {
+      ...updatedTaskData,
+      tenant_name: tenant?.name || 'Unknown Organization',
+      tenant_avatar_url: tenant?.avatar_url || null,
+      assignee_avatar_url: assigneeProfile?.avatar_url || null,
+      assignee_id: assigneeProfile?.id || null,
+    }
+
+    return NextResponse.json(fullTaskData)
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 })

@@ -274,7 +274,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[625px]">
+      <DialogContent className="sm:max-w-[625px] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Add New Task</DialogTitle>
           <DialogDescription className="text-gray-500">
@@ -285,7 +285,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-6 py-4"
+          className="space-y-4 py-4"
         >
           <div className="space-y-2">
             <Label htmlFor="tenant-select" className="text-sm font-medium">Organization</Label>
@@ -416,7 +416,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
               id="new-body"
               value={newTask.body}
               onChange={(e) => setNewTask({ ...newTask, body: e.target.value })}
-              className="min-h-[200px] resize-y"
+              className="min-h-[100px] max-h-[200px] resize-y"
               placeholder="Enter task details here..."
             />
           </div>

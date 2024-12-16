@@ -229,7 +229,13 @@ export async function GET() {
     // Fetch comments for the retrieved tasks
     const { data: comments, error: commentsError } = await supabase
       .from('comments')
-      .select('*')
+      .select(`
+        *,
+        profile:user_id (
+          avatar_url,
+          name
+        )
+      `)
       .in('task_id', tasks.map(t => t.id))
       .order('created_at', { ascending: true })
 

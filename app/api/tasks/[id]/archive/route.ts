@@ -61,7 +61,45 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json(data)
+    console.log('Task data after update:', data)
+
+    // Fetch the tenant and assignee data separately
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .select('name, avatar_url')
+      .eq('id', data.tenant_id)
+      .single()
+
+    if (tenantError) {
+      console.error('Tenant fetch error:', tenantError)
+    }
+    console.log('Tenant data:', tenant)
+
+    const { data: assignee, error: assigneeError } = await supabase
+      .from('profiles')
+      .select('name, avatar_url')
+      .eq('id', data.assignee_id)
+      .single()
+
+    if (assigneeError) {
+      console.error('Assignee fetch error:', assigneeError)
+    }
+    console.log('Assignee data:', assignee)
+
+    // Combine all the data
+    const responseData = {
+      ...data,
+      tenant_name: tenant?.name,
+      tenant_avatar_url: tenant?.avatar_url,
+      assignee: data.assignee,
+      assignee_avatar_url: assignee?.avatar_url,
+      assignee_id: data.assignee_id
+    }
+
+    // Add debug logging
+    console.log('Assignee avatar URL:', assignee?.avatar_url)
+    console.log('Final response data:', responseData)
+    return NextResponse.json(responseData)
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 })

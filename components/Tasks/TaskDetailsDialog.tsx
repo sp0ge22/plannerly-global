@@ -6,12 +6,24 @@ import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { UserCircle, Calendar, MessageSquare, Send, Clock, Edit2, X, Loader2, Wand2, User } from 'lucide-react'
+import { UserCircle, Calendar as CalendarIcon, MessageSquare, Send, Clock, Edit2, X, Loader2, Wand2, User } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Task, Comment } from '@/types/task'
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+
+type OrgUser = {
+  user_id: string
+  profile: {
+    name: string | null
+    email: string | null
+    avatar_url: string | null
+  }
+}
 
 interface TaskDetailsDialogProps {
   task: Task
@@ -52,10 +64,68 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
   const { toast } = useToast()
   const scrollViewportRef = useRef<HTMLDivElement>(null)
   const [isOpen, setIsOpen] = useState(false)
+  const [orgUsers, setOrgUsers] = useState<OrgUser[]>([])
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
     setEditingTask(task)
   }, [task])
+
+  useEffect(() => {
+    const fetchOrgUsers = async () => {
+      if (!editingTask.tenant_id) return
+
+      // First get user_ids from user_tenants
+      const { data: userTenants, error: userTenantsError } = await supabase
+        .from('user_tenants')
+        .select('user_id')
+        .eq('tenant_id', editingTask.tenant_id)
+
+      if (userTenantsError) {
+        console.error('Error fetching organization users:', userTenantsError)
+        toast({
+          title: "Error fetching users",
+          description: "Could not load organization users.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (!userTenants?.length) {
+        setOrgUsers([])
+        return
+      }
+
+      // Then get profiles for those users
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url')
+        .in('id', userTenants.map(ut => ut.user_id))
+
+      if (profilesError) {
+        console.error('Error fetching user profiles:', profilesError)
+        toast({
+          title: "Error fetching users",
+          description: "Could not load user profiles.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const users: OrgUser[] = profiles.map(profile => ({
+        user_id: profile.id,
+        profile: {
+          name: profile.name,
+          email: profile.email,
+          avatar_url: profile.avatar_url
+        }
+      }))
+
+      setOrgUsers(users)
+    }
+
+    fetchOrgUsers()
+  }, [editingTask.tenant_id, supabase, toast])
 
   // Scroll to bottom when comments change
   useEffect(() => {
@@ -294,7 +364,7 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-1">
-                    <Calendar className="w-4 h-4" />
+                    <CalendarIcon className="w-4 h-4" />
                     <span>Created: {formatDate(task.created_at)}</span>
                   </div>
                   {task.due && (
@@ -442,23 +512,85 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
                       </Select>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="assignee">Assignee</Label>
-                    <Select
-                      value={editingTask.assignee}
-                      onValueChange={(value: string) => 
-                        setEditingTask({ ...editingTask, assignee: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select assignee" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Ross">Ross</SelectItem>
-                        <SelectItem value="Brian">Brian</SelectItem>
-                        <SelectItem value="Spencer">Spencer</SelectItem>
-                        <SelectItem value="Tommy">Tommy</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="assignee">Assignee</Label>
+                      <Select
+                        value={editingTask.assignee}
+                        onValueChange={(value: string) => 
+                          setEditingTask({ ...editingTask, assignee: value })}
+                      >
+                        <SelectTrigger id="assignee" className="w-full">
+                          <SelectValue placeholder="Select assignee">
+                            {editingTask.assignee && (
+                              <div className="flex items-center space-x-2">
+                                <Avatar className="h-5 w-5">
+                                  <AvatarImage 
+                                    src={orgUsers.find(u => 
+                                      (u.profile.name === editingTask.assignee || 
+                                       u.profile.email === editingTask.assignee ||
+                                       u.user_id === editingTask.assignee)
+                                    )?.profile.avatar_url ?? undefined} 
+                                  />
+                                  <AvatarFallback>
+                                    {editingTask.assignee.slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span>{editingTask.assignee}</span>
+                              </div>
+                            )}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {orgUsers.map((user) => (
+                            <SelectItem 
+                              key={user.user_id} 
+                              value={user.profile.name || user.profile.email || user.user_id}
+                            >
+                              <div className="flex items-center space-x-2">
+                                <Avatar className="h-5 w-5">
+                                  <AvatarImage src={user.profile.avatar_url ?? undefined} />
+                                  <AvatarFallback>
+                                    {(user.profile.name || user.profile.email || user.user_id)
+                                      .slice(0, 2)
+                                      .toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span>
+                                  {user.profile.name || user.profile.email || user.user_id}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="due-date">Due Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                            id="due-date"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {editingTask.due ? format(new Date(editingTask.due), "PPP") : <span>Set due date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={editingTask.due ? new Date(editingTask.due) : undefined}
+                            onSelect={(date) => setEditingTask({ 
+                              ...editingTask, 
+                              due: date ? date.toISOString() : null 
+                            })}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </div>
                   <div className="flex justify-end space-x-2 pt-4">
                     <Button variant="outline" onClick={() => setIsEditing(false)}>
@@ -521,7 +653,7 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
                                 <p className="font-medium text-sm truncate">{comment.profile?.name || comment.author}</p>
                               </div>
                               <p className="text-xs text-gray-500 flex items-center flex-shrink-0">
-                                <Calendar className="w-3 h-3 mr-1" />
+                                <CalendarIcon className="w-3 h-3 mr-1" />
                                 {new Date(comment.created_at).toLocaleString()}
                               </p>
                             </div>

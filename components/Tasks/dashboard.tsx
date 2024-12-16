@@ -133,7 +133,7 @@ export function DashboardComponent() {
       // Get user's profile
       const { data: profile } = await supabase
         .from('profiles')
-        .select('name')
+        .select('name, avatar_url')
         .eq('id', session.user.id)
         .single()
 
@@ -148,9 +148,20 @@ export function DashboardComponent() {
       if (!response.ok) throw new Error('Failed to add comment')
 
       const newComment = await response.json()
+      
+      // Update tasks with the new comment including profile data
       setTasks(prev => prev.map(task => 
         task.id === taskId 
-          ? { ...task, comments: [...(task.comments || []), newComment] }
+          ? { 
+              ...task, 
+              comments: [...(task.comments || []), {
+                ...newComment,
+                profile: {
+                  name: profile?.name,
+                  avatar_url: profile?.avatar_url
+                }
+              }]
+            }
           : task
       ))
     } catch (error) {
@@ -200,10 +211,29 @@ export function DashboardComponent() {
 
       if (!response.ok) throw new Error('Failed to update task')
 
-      const updatedTask = await response.json()
-      setTasks(prev => prev.map(task => 
-        task.id === updatedTask.id ? updatedTask : task
-      ))
+      const data = await response.json()
+      console.log('Received task data:', data)
+      
+      // Map the returned data to include tenant and assignee information
+      const updatedTask = {
+        ...data,
+        tenant_name: data.tenant_name || data.tenant?.name,
+        tenant_avatar_url: data.tenant_avatar_url || data.tenant?.avatar_url,
+        assignee: data.assignee,
+        assignee_id: data.assignee_id,
+        assignee_avatar_url: data.assignee_avatar_url,
+        comments: data.comments || []
+      }
+
+      console.log('Updated task data:', updatedTask)
+
+      setTasks(prev => {
+        const newTasks = prev.map(task => 
+          task.id === updatedTask.id ? updatedTask : task
+        )
+        console.log('New tasks state:', newTasks)
+        return newTasks
+      })
 
       toast({
         title: archived ? "Task archived" : "Task restored",
@@ -258,7 +288,10 @@ export function DashboardComponent() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowArchived(!showArchived)}
+              onClick={async () => {
+                setShowArchived(!showArchived)
+                await refreshTasks()
+              }}
             >
               {showArchived ? (
                 <>
