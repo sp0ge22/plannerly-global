@@ -467,13 +467,17 @@ export default function EmailAssistantPage() {
   return (
     <div className="flex flex-col min-h-screen bg-neutral-50">
       <main className="flex-1 p-6">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-5xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Mail className="w-6 h-6" />
               <h1 className="text-3xl font-bold">Email Assistant</h1>
             </div>
             <div className="flex items-center space-x-2">
+              <Button variant="ghost" onClick={() => window.location.href = '/help/email-assistant'}>
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Help & Guides
+              </Button>
               <Button variant="outline" onClick={() => window.location.href = '/prompt-library'}>
                 <Library className="w-4 h-4 mr-2" />
                 Prompt Library
@@ -976,6 +980,12 @@ export default function EmailAssistantPage() {
                 </div>
               </div>
             </div>
+          </div>
+          <div className="mt-2 pt-3 border-t">
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Need help? Check out our <Button variant="link" className="h-auto p-0" onClick={() => window.location.href = '/help/email-assistant'}>guides and documentation</Button>
+            </p>
           </div>
           <DialogFooter className="flex justify-end gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => handleSuggestionResponse(false)}>

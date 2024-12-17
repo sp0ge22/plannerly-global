@@ -397,6 +397,10 @@ export default function PromptLibraryPage() {
               <h1 className="text-3xl font-bold">Prompt Library</h1>
             </div>
             <div className="flex items-center space-x-2">
+              <Button variant="ghost" onClick={() => window.location.href = '/help/email-assistant'}>
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Help & Guides
+              </Button>
               <Button variant="outline" onClick={() => window.location.href = '/email-assistant'}>
                 <Mail className="w-4 h-4 mr-2" />
                 Email Assistant
@@ -921,6 +925,12 @@ export default function PromptLibraryPage() {
                 </div>
               </div>
             </div>
+          </div>
+          <div className="mt-2 pt-3 border-t">
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Need help? Check out our <Button variant="link" className="h-auto p-0" onClick={() => window.location.href = '/help/email-assistant'}>guides and documentation</Button>
+            </p>
           </div>
           <DialogFooter className="flex justify-end gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => handleSuggestionResponse(false)}>
