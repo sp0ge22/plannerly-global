@@ -12,7 +12,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Library, Plus, Edit2, Trash2, MessageSquare, RefreshCw, Wand2, Loader2, Sparkles, ChevronDown } from 'lucide-react'
+import { Library, Plus, Edit2, Trash2, MessageSquare, RefreshCw, Wand2, Loader2, Sparkles, ChevronDown, Mail } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 type EmailType = 'response' | 'rewrite'
@@ -72,6 +72,7 @@ export default function PromptLibraryPage() {
   const [promptDescription, setPromptDescription] = useState('')
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
   const [expandedPrompts, setExpandedPrompts] = useState<Record<string, boolean>>({})
+  const [showSuggestionDialog, setShowSuggestionDialog] = useState(false)
 
   const { toast } = useToast()
   const supabase = createClientComponentClient()
@@ -373,6 +374,19 @@ export default function PromptLibraryPage() {
     }))
   }
 
+  const handleAddPromptClick = () => {
+    setShowSuggestionDialog(true)
+  }
+
+  const handleSuggestionResponse = (useAI: boolean) => {
+    setShowSuggestionDialog(false)
+    if (useAI) {
+      setIsAddingPromptWithAI(true)
+    } else {
+      setIsAddingPrompt(true)
+    }
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-neutral-50">
       <main className="flex-1 p-6">
@@ -383,6 +397,10 @@ export default function PromptLibraryPage() {
               <h1 className="text-3xl font-bold">Prompt Library</h1>
             </div>
             <div className="flex items-center space-x-2">
+              <Button variant="outline" onClick={() => window.location.href = '/email-assistant'}>
+                <Mail className="w-4 h-4 mr-2" />
+                Email Assistant
+              </Button>
               <Button variant="outline" onClick={() => {
                 setNewPrompt({
                   ...newPrompt,
@@ -393,7 +411,7 @@ export default function PromptLibraryPage() {
                 <Sparkles className="w-4 h-4 mr-2" />
                 Add Prompt with AI
               </Button>
-              <Button onClick={() => setIsAddingPrompt(true)}>
+              <Button onClick={handleAddPromptClick}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Prompt
               </Button>
@@ -847,6 +865,71 @@ export default function PromptLibraryPage() {
                   Generate Prompt
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSuggestionDialog} onOpenChange={setShowSuggestionDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-full bg-primary/10">
+                <Sparkles className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl">Try AI-Assisted Creation?</DialogTitle>
+                <DialogDescription className="text-base">
+                  Let AI help you craft the perfect email prompt
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="py-6">
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <Wand2 className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Intelligent Generation</h4>
+                  <p className="text-sm text-muted-foreground">
+                    AI will help you create detailed, effective email handling instructions based on your description
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <RefreshCw className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Easy Refinement</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Review and refine the generated prompt until it's exactly what you need
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <MessageSquare className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Natural Description</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Just describe what you want in plain language, and AI will do the heavy lifting
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex justify-end gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => handleSuggestionResponse(false)}>
+              <Edit2 className="w-4 h-4 mr-2" />
+              I'll create it manually
+            </Button>
+            <Button onClick={() => handleSuggestionResponse(true)} className="gap-2">
+              <Sparkles className="w-4 h-4" />
+              Use AI Assistant
             </Button>
           </DialogFooter>
         </DialogContent>
