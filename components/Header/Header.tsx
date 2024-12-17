@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Settings, Users } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from "@/lib/utils"
+import { PostgrestError } from '@supabase/supabase-js'
 
 export function Header() {
   const router = useRouter()
@@ -56,6 +57,15 @@ export function Header() {
           }
 
           // Fetch user's organizations
+          type TenantResponse = {
+            tenant_id: string;
+            tenants: {
+              id: string;
+              name: string;
+              avatar_url: string | null;
+            };
+          }
+
           const { data: userTenants, error: tenantError } = await supabase
             .from('user_tenants')
             .select(`
@@ -66,7 +76,10 @@ export function Header() {
                 avatar_url
               )
             `)
-            .eq('user_id', session.user.id)
+            .eq('user_id', session.user.id) as { 
+              data: TenantResponse[] | null; 
+              error: PostgrestError | null; 
+            }
 
           if (!tenantError && userTenants) {
             const orgs = userTenants
