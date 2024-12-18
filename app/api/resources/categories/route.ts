@@ -12,29 +12,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Get tenant_id
-    const { data: userTenant, error: userTenantError } = await supabase
-      .from('user_tenants')
-      .select('tenant_id')
-      .eq('user_id', session.user.id)
-      .single()
+    // Read request body once
+    const { name, tenant_id: initialTenantId } = await request.json()
+    let tenant_id = initialTenantId
 
-    if (userTenantError || !userTenant) {
-      console.error('User tenant lookup error:', userTenantError)
-      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+    // If tenant_id is provided, verify user has access to it
+    if (tenant_id) {
+      const { data: userTenant, error: userTenantError } = await supabase
+        .from('user_tenants')
+        .select('tenant_id')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', tenant_id)
+        .single()
+
+      if (userTenantError || !userTenant) {
+        console.error('User tenant access error:', userTenantError)
+        return NextResponse.json({ error: 'Not authorized for this organization' }, { status: 403 })
+      }
+    } else {
+      // If no tenant_id provided, get the first tenant_id the user has access to
+      const { data: userTenant, error: userTenantError } = await supabase
+        .from('user_tenants')
+        .select('tenant_id')
+        .eq('user_id', session.user.id)
+        .limit(1)
+        .single()
+
+      if (userTenantError || !userTenant) {
+        console.error('User tenant lookup error:', userTenantError)
+        return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+      }
+
+      tenant_id = userTenant.tenant_id
     }
-
-    const tenantId = userTenant.tenant_id
-
-    const { name } = await request.json()
-    console.log('Attempting to create category with name:', name)
 
     // Check if category already exists within this tenant
     const { data: existingCategory, error: checkError } = await supabase
       .from('resource_categories')
       .select('*')
       .eq('name', name)
-      .eq('tenant_id', tenantId)
+      .eq('tenant_id', tenant_id)
       .maybeSingle()
 
     if (checkError) {
@@ -50,17 +67,13 @@ export async function POST(request: Request) {
     // Create new category for this tenant
     const { data: newCategory, error: insertError } = await supabase
       .from('resource_categories')
-      .insert([{ name, tenant_id: tenantId }])
+      .insert([{ name, tenant_id }])
       .select('*')
       .single()
 
     if (insertError) {
       console.error('Error inserting category:', insertError)
       throw insertError
-    }
-
-    if (!newCategory) {
-      throw new Error('No data returned from insert')
     }
 
     console.log('Successfully created category:', newCategory)

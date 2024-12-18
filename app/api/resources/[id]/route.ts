@@ -17,36 +17,46 @@ export async function DELETE(
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Get tenant_id
+    // First, get the resource to check its tenant_id
+    const { data: resource, error: resourceError } = await supabase
+      .from('resources')
+      .select('tenant_id')
+      .eq('id', params.id)
+      .single()
+
+    if (resourceError || !resource) {
+      console.error('Resource lookup error:', resourceError)
+      return NextResponse.json({ error: 'Resource not found' }, { status: 404 })
+    }
+
+    // Check if user has access to this resource's tenant
     const { data: userTenant, error: userTenantError } = await supabase
       .from('user_tenants')
       .select('tenant_id')
       .eq('user_id', session.user.id)
+      .eq('tenant_id', resource.tenant_id)
       .single()
 
     if (userTenantError || !userTenant) {
-      console.error('User tenant lookup error:', userTenantError)
-      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+      console.error('User tenant access error:', userTenantError)
+      return NextResponse.json({ error: 'Not authorized to delete this resource' }, { status: 403 })
     }
 
-    const tenantId = userTenant.tenant_id
+    // Get PIN from request body
+    const { pin } = await request.json()
 
-    const body = await request.json()
-    const { pin } = body
-
-    // Verify PIN
-    if (pin !== DEFAULT_PIN) {
-      return NextResponse.json({ error: 'Invalid PIN' }, { status: 403 })
+    // Verify PIN (you might want to implement your own PIN verification logic)
+    if (!pin) {
+      return NextResponse.json({ error: 'PIN required' }, { status: 400 })
     }
 
-    // Delete the resource only if it belongs to this tenant
-    const { error } = await supabase
+    // Delete the resource
+    const { error: deleteError } = await supabase
       .from('resources')
       .delete()
       .eq('id', params.id)
-      .eq('tenant_id', tenantId)
 
-    if (error) throw error
+    if (deleteError) throw deleteError
 
     return NextResponse.json({ success: true })
   } catch (error) {

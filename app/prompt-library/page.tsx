@@ -73,6 +73,10 @@ export default function PromptLibraryPage() {
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
   const [expandedPrompts, setExpandedPrompts] = useState<Record<string, boolean>>({})
   const [showSuggestionDialog, setShowSuggestionDialog] = useState(false)
+  const [showPinDialog, setShowPinDialog] = useState(false)
+  const [pinValue, setPinValue] = useState('')
+  const [promptToDelete, setPromptToDelete] = useState<EmailPrompt | null>(null)
+  const [isVerifyingPin, setIsVerifyingPin] = useState(false)
 
   const { toast } = useToast()
   const supabase = createClientComponentClient()
@@ -225,28 +229,60 @@ export default function PromptLibraryPage() {
     }
   }
 
-  const handleDeletePrompt = async (id: string) => {
+  const handleDeletePrompt = async (prompt: EmailPrompt) => {
+    setPromptToDelete(prompt)
+    setPinValue('')
+    setShowPinDialog(true)
+  }
+
+  const verifyPinAndDelete = async () => {
+    if (!promptToDelete || !pinValue.trim()) return
+
+    setIsVerifyingPin(true)
     try {
-      const response = await fetch('/api/email-prompts', {
-        method: 'DELETE',
+      // Verify PIN with the backend
+      const response = await fetch('/api/verify-org-pin', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ 
+          tenant_id: promptToDelete.tenant_id,
+          pin: pinValue
+        }),
       })
 
-      if (!response.ok) throw new Error('Failed to delete prompt')
+      if (!response.ok) {
+        throw new Error('Invalid PIN')
+      }
 
-      setPrompts(prompts.filter(p => p.id !== id))
+      // If PIN is verified, proceed with deletion
+      const deleteResponse = await fetch('/api/email-prompts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: promptToDelete.id }),
+      })
+
+      if (!deleteResponse.ok) {
+        throw new Error('Failed to delete prompt')
+      }
+
+      setPrompts(prompts.filter(p => p.id !== promptToDelete.id))
+      setShowPinDialog(false)
+      setPromptToDelete(null)
+      setPinValue('')
+
       toast({
         title: "Prompt deleted",
         description: "The email prompt has been deleted.",
       })
     } catch (error) {
-      console.error('Error deleting prompt:', error)
+      console.error('Error:', error)
       toast({
-        title: "Error deleting prompt",
-        description: "Could not delete the email prompt.",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Could not delete the email prompt.",
         variant: "destructive",
       })
+    } finally {
+      setIsVerifyingPin(false)
     }
   }
 
@@ -509,7 +545,7 @@ export default function PromptLibraryPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => handleDeletePrompt(prompt.id)}
+                                  onClick={() => handleDeletePrompt(prompt)}
                                 >
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
@@ -593,7 +629,7 @@ export default function PromptLibraryPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => handleDeletePrompt(prompt.id)}
+                                  onClick={() => handleDeletePrompt(prompt)}
                                 >
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
@@ -940,6 +976,89 @@ export default function PromptLibraryPage() {
             <Button onClick={() => handleSuggestionResponse(true)} className="gap-2">
               <Sparkles className="w-4 h-4" />
               Use AI Assistant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPinDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowPinDialog(false)
+          setPromptToDelete(null)
+          setPinValue('')
+        }
+      }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={promptToDelete?.tenant.avatar_url ?? undefined} />
+                <AvatarFallback>
+                  {promptToDelete?.tenant.name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <DialogTitle className="text-xl">Confirm Deletion</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Enter {promptToDelete?.tenant.name}'s PIN to delete this prompt
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="mt-6">
+            <div className="space-y-4">
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-medium text-sm">Prompt to Delete:</h4>
+                <p className="text-sm text-muted-foreground">{promptToDelete?.title}</p>
+              </div>
+              <div className="space-y-3">
+                <Label htmlFor="pin" className="text-sm font-medium">
+                  Organization PIN
+                </Label>
+                <Input
+                  id="pin"
+                  type="password"
+                  value={pinValue}
+                  onChange={(e) => setPinValue(e.target.value)}
+                  placeholder="Enter 4-digit PIN"
+                  maxLength={4}
+                  pattern="[0-9]*"
+                  inputMode="numeric"
+                  className="text-lg tracking-widest"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Contact your organization owner if you don't know the PIN
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="mt-6 gap-2 sm:gap-0">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowPinDialog(false)
+                setPromptToDelete(null)
+                setPinValue('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={verifyPinAndDelete}
+              disabled={isVerifyingPin || !pinValue.trim() || pinValue.length !== 4}
+            >
+              {isVerifyingPin ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Prompt
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

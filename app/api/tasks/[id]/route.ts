@@ -145,8 +145,8 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     }
 
     const { pin } = await request.json()
-    if (pin !== '0220') {
-      return NextResponse.json({ error: 'Invalid PIN' }, { status: 403 })
+    if (!pin) {
+      return NextResponse.json({ error: 'PIN is required' }, { status: 400 })
     }
 
     // First verify the task belongs to one of the user's tenants
@@ -160,6 +160,22 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     if (taskCheckError || !taskCheck) {
       console.error('Task access error:', taskCheckError)
       return NextResponse.json({ error: 'Task not found or access denied' }, { status: 403 })
+    }
+
+    // Verify the PIN matches the organization's PIN
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .select('pin')
+      .eq('id', taskCheck.tenant_id)
+      .single()
+
+    if (tenantError || !tenant) {
+      console.error('Error fetching tenant:', tenantError)
+      return NextResponse.json({ error: 'Could not verify PIN' }, { status: 500 })
+    }
+
+    if (tenant.pin !== pin) {
+      return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
     }
 
     // Now delete the task

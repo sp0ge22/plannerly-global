@@ -409,26 +409,24 @@ export default function EmailAssistantHelpPage() {
                           <div className="space-y-6">
                             {[
                               {
-                                title: "Initial Sales Inquiry Response",
-                                description: "For responding to first-time product inquiries",
-                                instructions: `Imagine you're responding to: "I found your product online and I'm interested in learning more about [Product Name]."
+                                title: "General Warranty Response",
+                                description: "For responding to warranty inquiries",
+                                instructions: `• Begin with a sincere apology for any inconvenience
+• Use warm and empathetic tone throughout
+• Request the following warranty information:
+  - Proof of purchase
+  - Clear photographs of the item
+  - Product details and issue description
+• Explain how these details help expedite the process
+• Avoid technical jargon
+• End with commitment to assist and appreciation
 
-Create a welcoming response that:
-��� Thanks them for their interest in our products
-• Provides a brief overview of our company (We are [Company], specializing in...)
-• Asks about their specific needs and use case
-• Offers to schedule a demo or consultation
-• Includes your contact information
-
-Keep the tone friendly and professional, focusing on understanding their needs rather than immediate selling.`
+Keep language clear and simple while maintaining a supportive tone.`
                               },
                               {
                                 title: "Meeting Request Response",
                                 description: "For handling initial meeting requests",
-                                instructions: `When someone emails: "Would love to schedule a meeting to discuss potential collaboration"
-
-Respond with:
-1. Express appreciation for their interest
+                                instructions: `1. Express appreciation for their interest
 2. Suggest 2-3 specific time slots (e.g., "Would Tuesday at 2pm or Wednesday at 10am work?")
 3. Specify if it's virtual or in-person
 4. Ask if they have any specific topics they'd like to cover
@@ -439,24 +437,19 @@ Keep it brief and focused on setting up the initial meeting.`
                               {
                                 title: "Product Information Request",
                                 description: "For requesting specific product details from vendors",
-                                instructions: `Use when reaching out: "We are [Company Name] and we're interested in your [Product/Service] offering.
-
-Please provide:
+                                instructions: `Please provide:
 • Detailed product specifications
 • Pricing information for different tiers/volumes
 • Available customization options
 • Delivery timeframes
 • Technical documentation if applicable
 
-We appreciate your prompt response and look forward to learning more about your solutions."`
+We appreciate your prompt response and look forward to learning more about your solutions.`
                               },
                               {
                                 title: "Quote Request Response",
                                 description: "For responding to pricing inquiries",
-                                instructions: `When someone asks: "Can you provide pricing for your services?"
-
-Structure your response to:
-1. Thank them for their interest
+                                instructions: `1. Thank them for their interest
 2. Ask for key details needed for accurate pricing:
    - Project scope
    - Timeline requirements
@@ -470,14 +463,12 @@ End with a clear next step to gather the needed information.`
                               {
                                 title: "Support Ticket Follow-up",
                                 description: "For checking if an issue was resolved",
-                                instructions: `After providing a solution, write: "I wanted to follow up regarding the [specific issue] you reported.
-
-Could you please:
+                                instructions: `Could you please:
 • Confirm if the solution resolved your issue
 • Let us know if you're experiencing any other problems
 • Share any feedback about the resolution process
 
-We're here to help if you need any further assistance."`
+We're here to help if you need any further assistance.`
                               }
                             ].map((example, index) => (
                               <div key={index} className="border rounded-lg p-4">
@@ -547,26 +538,18 @@ We're here to help if you need any further assistance."`
                               {
                                 title: "Technical to Simple Language",
                                 description: "For simplifying technical explanations",
-                                instructions: `When you receive a technical explanation like: "Our system uses advanced ML algorithms for predictive analytics..."
-
-Rewrite it to:
-• Use everyday language
+                                instructions: `• Use everyday language
 • Include practical examples
 • Focus on benefits rather than technical details
 • Avoid jargon and acronyms
 • Add relevant comparisons
-
-Example structure: "Our system learns from past data to help predict future trends, similar to how..."
 
 Keep explanations clear and relatable to non-technical readers.`
                               },
                               {
                                 title: "Urgent Request Clarification",
                                 description: "For responding to urgent but vague requests",
-                                instructions: `When receiving: "Need this ASAP!"
-
-Respond professionally with:
-"I understand this is urgent and I want to help. To proceed quickly, please:
+                                instructions: `"I understand this is urgent and I want to help. To proceed quickly, please:
 • Specify exactly what you need
 • When you need it by (exact date/time)
 • Any specific format requirements
@@ -577,9 +560,7 @@ I'll prioritize this once I have these details."`
                               {
                                 title: "Professional Tone Adjustment",
                                 description: "For making casual emails more professional",
-                                instructions: `Transform casual messages like: "Hey! Just wondering if you guys got around to checking that thing I sent last week?"
-
-Key adjustments:
+                                instructions: `Key adjustments:
 • Use proper salutations
 • Remove casual language
 • Add specific references
@@ -591,10 +572,7 @@ While being professional, preserve the original query's intent and urgency.`
                               {
                                 title: "Feature Announcement",
                                 description: "For announcing new product features",
-                                instructions: `Start with: "We're excited to announce [Feature Name]!"
-
-Then structure as:
-1. One-sentence feature summary
+                                instructions: `1. One-sentence feature summary
 2. Key benefit to the user
 3. How to access/use it
 4. Where to find more information
@@ -605,9 +583,7 @@ Keep it focused on user value rather than technical details.`
                               {
                                 title: "Deadline Extension Request",
                                 description: "For requesting more time professionally",
-                                instructions: `When you need more time: "Regarding the [Project/Deliverable] due on [Date]..."
-
-Include:
+                                instructions: `Include:
 • Clear acknowledgment of original deadline
 • Specific new date request
 • Brief, honest reason for extension

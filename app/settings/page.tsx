@@ -33,6 +33,7 @@ interface UserTenant {
     id: string
     name: string
     avatar_url: string | null
+    pin: string | null
   }
 }
 
@@ -55,11 +56,14 @@ export default function SettingsPage() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [newTenantId, setNewTenantId] = useState('')
   const [isJoiningOrg, setIsJoiningOrg] = useState(false)
+  const [pin, setPin] = useState('')
+  const [pinError, setPinError] = useState('')
   const [organizations, setOrganizations] = useState<Array<{
     id: string;
     name: string;
     is_owner: boolean;
     avatar_url: string | null;
+    pin: string | null;
   }>>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -95,7 +99,8 @@ export default function SettingsPage() {
               tenants (
                 id,
                 name,
-                avatar_url
+                avatar_url,
+                pin
               )
             `)
             .eq('user_id', session.user.id) as { data: UserTenant[] | null, error: PostgrestError }
@@ -107,7 +112,8 @@ export default function SettingsPage() {
               id: ut.tenant_id,
               name: ut.tenants.name,
               is_owner: ut.is_owner,
-              avatar_url: ut.tenants.avatar_url
+              avatar_url: ut.tenants.avatar_url,
+              pin: ut.tenants.pin
             }))
             setOrganizations(orgs)
             
@@ -858,6 +864,32 @@ export default function SettingsPage() {
                       placeholder="Enter organization name"
                     />
                   </div>
+
+                  {organizations.find(org => org.id === selectedOrgId)?.is_owner && (
+                    <div className="space-y-2">
+                      <Label htmlFor="org-pin">Organization PIN (4 digits)</Label>
+                      <Input
+                        id="org-pin"
+                        value={pin}
+                        onChange={(e) => {
+                          // Only allow numbers and limit to 4 digits
+                          const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+                          setPin(value)
+                          setPinError('')
+                        }}
+                        placeholder="Enter 4-digit PIN"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        inputMode="numeric"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        You will need this PIN to delete items in your organization.
+                      </p>
+                      {pinError && (
+                        <p className="text-sm text-destructive">{pinError}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <DialogFooter className="mt-6">
                   <Button
@@ -865,6 +897,8 @@ export default function SettingsPage() {
                     onClick={() => {
                       setIsEditingOrgName(false)
                       setNewOrgName('')
+                      setPin('')
+                      setPinError('')
                     }}
                   >
                     Cancel
@@ -873,10 +907,27 @@ export default function SettingsPage() {
                     onClick={async () => {
                       if (!selectedOrgId || !newOrgName.trim()) return
                       
+                      // Validate PIN if it's being changed
+                      if (pin) {
+                        if (!/^\d{4}$/.test(pin)) {
+                          setPinError('PIN must be exactly 4 digits')
+                          return
+                        }
+                      }
+                      
                       try {
+                        const updates: { name: string; pin?: string } = {
+                          name: newOrgName.trim()
+                        }
+                        
+                        // Only include PIN in update if it's changed
+                        if (pin) {
+                          updates.pin = pin
+                        }
+
                         const { error } = await supabase
                           .from('tenants')
-                          .update({ name: newOrgName.trim() })
+                          .update(updates)
                           .eq('id', selectedOrgId)
 
                         if (error) throw error
@@ -885,23 +936,25 @@ export default function SettingsPage() {
                         setOrganizations(orgs => 
                           orgs.map(org => 
                             org.id === selectedOrgId 
-                              ? { ...org, name: newOrgName.trim() }
+                              ? { ...org, name: newOrgName.trim(), pin: pin || org.pin }
                               : org
                           )
                         )
 
                         setIsEditingOrgName(false)
                         setNewOrgName('')
+                        setPin('')
+                        setPinError('')
 
                         toast({
                           title: "Organization updated",
-                          description: "The organization name has been updated successfully.",
+                          description: "The organization settings have been updated successfully.",
                         })
                       } catch (error) {
                         console.error('Error updating organization:', error)
                         toast({
                           title: "Error updating organization",
-                          description: "There was an error updating the organization name. Please try again.",
+                          description: "There was an error updating the organization settings. Please try again.",
                           variant: "destructive",
                         })
                       }

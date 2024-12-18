@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Plus, Folder, Link2, Search, Trash2, Pencil } from 'lucide-react'
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 
 interface Resource {
@@ -35,6 +36,7 @@ interface Category {
 interface Tenant {
   id: string
   name: string
+  avatar_url: string | null
 }
 
 export default function ResourcesPage() {
@@ -76,7 +78,10 @@ export default function ResourcesPage() {
       const response = await fetch('/api/resources/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCategory }),
+        body: JSON.stringify({ 
+          name: newCategory,
+          tenant_id: selectedTenant !== 'all' ? selectedTenant : undefined
+        }),
       })
 
       const data = await response.json()
@@ -189,6 +194,7 @@ export default function ResourcesPage() {
     try {
       const response = await fetch('/api/resources')
       const data = await response.json()
+      console.log('Fetched tenants:', data.tenants)
       setResources(data.resources)
       setCategories(data.categories)
       setTenants(data.tenants)
@@ -362,13 +368,36 @@ export default function ResourcesPage() {
                 </Select>
                 <Select value={selectedTenant} onValueChange={setSelectedTenant}>
                   <SelectTrigger className="bg-neutral-50">
-                    <SelectValue placeholder="All Organizations" />
+                    <SelectValue placeholder="All Organizations">
+                      {selectedTenant !== 'all' && (
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage 
+                              src={tenants.find(t => t.id === selectedTenant)?.avatar_url || undefined}
+                              alt={tenants.find(t => t.id === selectedTenant)?.name}
+                            />
+                            <AvatarFallback>
+                              {tenants.find(t => t.id === selectedTenant)?.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{tenants.find(t => t.id === selectedTenant)?.name}</span>
+                        </div>
+                      )}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Organizations</SelectItem>
-                    {tenants.map(tenant => (
+                    {tenants.map((tenant) => (
                       <SelectItem key={tenant.id} value={tenant.id}>
-                        {tenant.name}
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={tenant.avatar_url || undefined} />
+                            <AvatarFallback>
+                              {tenant.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{tenant.name}</span>
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -399,6 +428,9 @@ export default function ResourcesPage() {
                     )
                     if (categoryResources.length === 0) return null
 
+                    // Find the tenant for this category
+                    const tenant = tenants.find(t => t.id === category.tenant_id)
+
                     return (
                       <motion.div
                         key={category.id}
@@ -424,9 +456,24 @@ export default function ResourcesPage() {
                             ) : (
                               <Folder className="w-6 h-6 text-muted-foreground" />
                             )}
-                            <h2 className="text-lg font-semibold group-hover:text-primary transition-colors">
-                              {category.name}
-                            </h2>
+                            <div className="flex items-center gap-2">
+                              <h2 className="text-lg font-semibold group-hover:text-primary transition-colors">
+                                {category.name}
+                              </h2>
+                              <span className="text-muted-foreground text-sm">•</span>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-5 w-5">
+                                  <AvatarImage 
+                                    src={tenant?.avatar_url || undefined}
+                                    alt={tenant?.name}
+                                  />
+                                  <AvatarFallback>
+                                    {tenant?.name.slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm text-muted-foreground">{tenant?.name}</span>
+                              </div>
+                            </div>
                             <Pencil className="w-4 h-4 opacity-0 group-hover:opacity-50" />
                           </div>
                         </div>
@@ -504,12 +551,34 @@ export default function ResourcesPage() {
                 onValueChange={(value) => setNewResource(prev => ({ ...prev, tenant_id: value }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select an organization" />
+                  <SelectValue placeholder="Select organization">
+                    {newResource.tenant_id && (
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage 
+                            src={tenants.find(t => t.id === newResource.tenant_id)?.avatar_url || undefined}
+                          />
+                          <AvatarFallback>
+                            {tenants.find(t => t.id === newResource.tenant_id)?.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{tenants.find(t => t.id === newResource.tenant_id)?.name}</span>
+                      </div>
+                    )}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {tenants.map(tenant => (
+                  {tenants.map((tenant) => (
                     <SelectItem key={tenant.id} value={tenant.id}>
-                      {tenant.name}
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={tenant.avatar_url || undefined} />
+                          <AvatarFallback>
+                            {tenant.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{tenant.name}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -36,7 +36,7 @@ export async function GET() {
         .in('tenant_id', tenantIds)
         .order('name', { ascending: true }),
       supabase.from('tenants')
-        .select('id, name')
+        .select('id, name, avatar_url')
         .in('id', tenantIds)
     ])
 
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { title, url, description, category_id, tenant_id } = body
+    const { title, url, description, category_id, tenant_id, image_url } = body
 
     // Verify user has access to the specified tenant
     const { data: userTenant, error: userTenantError } = await supabase
@@ -81,15 +81,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Not authorized for this organization' }, { status: 403 })
     }
 
+    // Create resource object, excluding empty category_id
+    const resourceData: any = {
+      title,
+      url,
+      description,
+      tenant_id,
+      image_url
+    }
+
+    // Only add category_id if it's not empty
+    if (category_id && category_id !== '') {
+      resourceData.category_id = parseInt(category_id)
+    }
+
     const { data, error } = await supabase
       .from('resources')
-      .insert([{ 
-        title, 
-        url, 
-        description, 
-        category_id,
-        tenant_id
-      }])
+      .insert([resourceData])
       .select()
       .single()
 

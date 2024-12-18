@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Trash2, Calendar, Clock, AlertCircle, Flag, UserCircle, Archive, ArchiveRestore, Building2 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -224,39 +224,62 @@ export function TaskCard({
       </Card>
 
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-destructive flex items-center gap-2">
-              <Trash2 className="w-5 h-5" />
-              Delete Task
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-6">
-            <div className="mb-6 space-y-2">
-              <p className="font-medium">Are you sure you want to delete this task?</p>
-              <p className="text-sm text-muted-foreground">
-                &ldquo;{task.title}&rdquo;
-              </p>
-              <p className="text-sm text-muted-foreground">
-                This action cannot be undone.
-              </p>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={task.tenant_avatar_url ?? undefined} />
+                <AvatarFallback>
+                  {(task.tenant_name || 'Unknown').slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <DialogTitle className="text-xl">Confirm Deletion</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Enter {task.tenant_name}'s PIN to delete this task
+                </DialogDescription>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="pin">Enter your PIN to confirm:</Label>
-              <Input
-                id="pin"
-                type="password"
-                placeholder="Enter PIN"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                className="max-w-[200px]"
-                autoComplete="off"
-              />
+          </DialogHeader>
+          <div className="mt-6">
+            <div className="space-y-4">
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-medium text-sm">Task to Delete:</h4>
+                <p className="text-sm text-muted-foreground">{task.title}</p>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Avatar className="h-4 w-4">
+                    <AvatarImage src={task.assignee_avatar_url ?? undefined} />
+                    <AvatarFallback className="text-[10px]">
+                      {task.assignee.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span>Assigned to {task.assignee}</span>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <Label htmlFor="pin" className="text-sm font-medium">
+                  Organization PIN
+                </Label>
+                <Input
+                  id="pin"
+                  type="password"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="Enter 4-digit PIN"
+                  maxLength={4}
+                  pattern="[0-9]*"
+                  inputMode="numeric"
+                  className="text-lg tracking-widest"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Contact your organization owner if you don't know the PIN
+                </p>
+              </div>
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="mt-6 gap-2 sm:gap-0">
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() => {
                 setIsDeleteDialogOpen(false);
                 setPin('');
@@ -267,7 +290,7 @@ export function TaskCard({
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={!pin}
+              disabled={!pin.trim() || pin.length !== 4}
               className="gap-2"
             >
               <Trash2 className="w-4 h-4" />
