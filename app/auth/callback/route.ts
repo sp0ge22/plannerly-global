@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Redirect to the home page
-    return NextResponse.redirect(new URL('/home', request.url))
+    return NextResponse.redirect(new URL('/tasks', request.url))
   } catch (error) {
     console.error('Auth callback error:', error)
     return NextResponse.redirect(new URL('/auth/login', request.url))

@@ -60,7 +60,7 @@ export function Login({
         throw error;
       }
 
-      router.push('/home')
+      router.push('/tasks')
     } catch (error: unknown) {
       const authError = error as AuthError
       toast({
