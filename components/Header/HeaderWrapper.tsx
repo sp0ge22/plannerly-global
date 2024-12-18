@@ -1,6 +1,6 @@
 'use client';
 import { usePathname } from 'next/navigation';
-import { Header } from './Header';
+import FlipNavWrapper from './Navbar';
 
 export function HeaderWrapper() {
   const pathname = usePathname();
@@ -10,5 +10,5 @@ export function HeaderWrapper() {
     return null;
   }
 
-  return <Header />;
+  return <FlipNavWrapper />;
 }
