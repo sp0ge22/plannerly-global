@@ -9,12 +9,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Loader2, Filter, RefreshCcw, Calendar, Archive, ArchiveRestore } from 'lucide-react'
+import { Plus, Search, Loader2, Filter, RefreshCcw, Calendar, Archive, ArchiveRestore, Crown, Shield, User } from 'lucide-react'
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { sortTasks } from './TaskGrid' // Ensure this import is correct
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { ArchivedTaskCard } from './ArchivedTaskCard'
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 export function DashboardComponent() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -22,6 +23,7 @@ export function DashboardComponent() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterPriority, setFilterPriority] = useState<string>('all')
   const [filterAssignee, setFilterAssignee] = useState<string>('all')
+  const [filterTenant, setFilterTenant] = useState<string>('all')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const { toast } = useToast()
   const [currentDate] = useState(new Date())
@@ -256,13 +258,73 @@ export function DashboardComponent() {
                          task.body.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesPriority = filterPriority === 'all' || task.priority === filterPriority
     const matchesAssignee = filterAssignee === 'all' || task.assignee === filterAssignee
+    const matchesTenant = filterTenant === 'all' || task.tenant_id === filterTenant
     const matchesArchiveStatus = task.archived === showArchived
 
-    return matchesSearch && matchesPriority && matchesAssignee && matchesArchiveStatus
+    return matchesSearch && matchesPriority && matchesAssignee && matchesTenant && matchesArchiveStatus
   }))
 
   const statusColumns = ['To Do', 'In Progress', 'Done']
+  // First get unique assignee names, then map to objects with avatar URLs
   const uniqueAssignees = Array.from(new Set(tasks.map(task => task.assignee)))
+    .map(assigneeName => {
+      const task = tasks.find(t => t.assignee === assigneeName)
+      return {
+        name: assigneeName,
+        avatar_url: task?.assignee_avatar_url
+      }
+    })
+    .filter(assignee => assignee.name)
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  // Get user's roles in organizations
+  const [userOrgRoles, setUserOrgRoles] = useState<Record<string, { is_owner: boolean; is_admin: boolean }>>({})
+
+  useEffect(() => {
+    const fetchUserRoles = async () => {
+      const { data: userTenants, error } = await supabase
+        .from('user_tenants')
+        .select('tenant_id, is_owner, is_admin')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+
+      if (!error && userTenants) {
+        const roles = userTenants.reduce((acc, ut) => ({
+          ...acc,
+          [ut.tenant_id]: { is_owner: ut.is_owner, is_admin: ut.is_admin }
+        }), {} as Record<string, { is_owner: boolean; is_admin: boolean }>)
+        setUserOrgRoles(roles)
+      }
+    }
+
+    fetchUserRoles()
+  }, [supabase])
+
+  const uniqueTenants = Array.from(new Set(tasks.map(task => task.tenant_id)))
+    .map(tenantId => {
+      const task = tasks.find(t => t.tenant_id === tenantId)
+      const role = userOrgRoles[tenantId || '']
+      return task ? {
+        id: task.tenant_id,
+        name: task.tenant_name || 'Unknown Organization',
+        avatar_url: task.tenant_avatar_url || undefined,
+        is_owner: role?.is_owner || false,
+        is_admin: role?.is_admin || false
+      } : null
+    })
+    .filter((tenant): tenant is { 
+      id: string; 
+      name: string; 
+      avatar_url: string | undefined;
+      is_owner: boolean;
+      is_admin: boolean;
+    } => Boolean(tenant))
+    .sort((a, b) => {
+      // Sort by role priority: owner -> admin -> member
+      if (a.is_owner !== b.is_owner) return a.is_owner ? -1 : 1
+      if (a.is_admin !== b.is_admin) return a.is_admin ? -1 : 1
+      // If same role level, sort alphabetically by name
+      return a.name.localeCompare(b.name)
+    })
 
   return (
     <motion.main
@@ -324,8 +386,8 @@ export function DashboardComponent() {
         </div>
 
         <Card className="p-4 mb-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="relative flex-grow">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full">
+            <div className="relative w-[400px]">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 placeholder="Search tasks..."
@@ -334,11 +396,81 @@ export function DashboardComponent() {
                 className="pl-9"
               />
             </div>
-            <div className="flex items-center space-x-2 min-w-[200px]">
+            <div className="flex items-center gap-4 flex-1">
               <Filter className="w-4 h-4 text-gray-400" />
+              <Select value={filterTenant} onValueChange={setFilterTenant}>
+                <SelectTrigger className="w-[300px]">
+                  <SelectValue>
+                    {filterTenant === 'all' ? (
+                      <span>All Organizations</span>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage 
+                            src={uniqueTenants.find(t => t.id === filterTenant)?.avatar_url}
+                          />
+                          <AvatarFallback>
+                            {(uniqueTenants.find(t => t.id === filterTenant)?.name || '??').slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const tenant = uniqueTenants.find(t => t.id === filterTenant)
+                            return (
+                              <>
+                                <span className="truncate">
+                                  {tenant?.name}
+                                </span>
+                                {tenant?.is_owner && (
+                                  <Crown className="w-3 h-3 text-yellow-500" />
+                                )}
+                                {!tenant?.is_owner && tenant?.is_admin && (
+                                  <Shield className="w-3 h-3 text-blue-500" />
+                                )}
+                                {!tenant?.is_owner && !tenant?.is_admin && (
+                                  <User className="w-3 h-3" />
+                                )}
+                              </>
+                            )
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Organizations</SelectItem>
+                  {uniqueTenants.map((tenant) => (
+                    <SelectItem key={tenant.id} value={tenant.id}>
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={tenant.avatar_url} />
+                          <AvatarFallback>
+                            {tenant.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex items-center gap-2">
+                          <span className="truncate">{tenant.name}</span>
+                          {tenant.is_owner && (
+                            <Crown className="w-3 h-3 text-yellow-500" />
+                          )}
+                          {!tenant.is_owner && tenant.is_admin && (
+                            <Shield className="w-3 h-3 text-blue-500" />
+                          )}
+                          {!tenant.is_owner && !tenant.is_admin && (
+                            <User className="w-3 h-3" />
+                          )}
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select value={filterPriority} onValueChange={setFilterPriority}>
                 <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Priority" />
+                  <SelectValue>
+                    {filterPriority === 'all' ? 'All Priorities' : filterPriority}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Priorities</SelectItem>
@@ -348,14 +480,38 @@ export function DashboardComponent() {
                 </SelectContent>
               </Select>
               <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Assignee" />
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue>
+                    {filterAssignee === 'all' ? (
+                      <span>All Assignees</span>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage 
+                            src={uniqueAssignees.find(a => a.name === filterAssignee)?.avatar_url ?? undefined}
+                          />
+                          <AvatarFallback>
+                            {filterAssignee.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{filterAssignee}</span>
+                      </div>
+                    )}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Assignees</SelectItem>
-                  {uniqueAssignees.map(assignee => (
-                    <SelectItem key={assignee} value={assignee}>
-                      {assignee}
+                  {uniqueAssignees.map((assignee) => (
+                    <SelectItem key={assignee.name} value={assignee.name}>
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={assignee.avatar_url ?? undefined} />
+                          <AvatarFallback>
+                            {assignee.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{assignee.name}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -368,19 +524,28 @@ export function DashboardComponent() {
               <span>Total: {tasks.length}</span>
               <Badge variant="outline">{filteredTasks.length} matches</Badge>
             </div>
-            {filterPriority !== 'all' || filterAssignee !== 'all' || searchQuery && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery('')
-                  setFilterPriority('all')
-                  setFilterAssignee('all')
-                }}
-              >
-                Clear filters
-              </Button>
-            )}
+            <div className="min-w-[100px] flex justify-end">
+              {(filterPriority !== 'all' || 
+                filterAssignee !== 'all' || 
+                filterTenant !== 'all' || 
+                searchQuery) ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery('')
+                    setFilterPriority('all')
+                    setFilterAssignee('all')
+                    setFilterTenant('all')
+                  }}
+                  className="font-medium"
+                >
+                  Clear filters
+                </Button>
+              ) : (
+                <div className="h-9" />
+              )}
+            </div>
           </div>
         </Card>
 

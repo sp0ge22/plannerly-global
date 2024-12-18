@@ -64,7 +64,8 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
   })
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [orgUsers, setOrgUsers] = useState<OrgUser[]>([])
-  const [isSummarizing, setIsSummarizing] = useState(false)
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false)
+  const [isSummarizingDescription, setIsSummarizingDescription] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const { toast } = useToast()
@@ -209,7 +210,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
       return
     }
 
-    setIsSummarizing(true)
+    setIsSummarizingDescription(true)
     try {
       const response = await fetch('/api/summarize', {
         method: 'POST',
@@ -233,7 +234,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
         variant: "destructive",
       })
     } finally {
-      setIsSummarizing(false)
+      setIsSummarizingDescription(false)
     }
   }
 
@@ -290,12 +291,25 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
     }
   }
 
+  const handleClearForm = () => {
+    setNewTask({
+      title: '',
+      body: '',
+      assignee: '',
+      status: 'To Do',
+      priority: 'Medium',
+      due: null,
+      archived: false,
+      tenant_id: newTask.tenant_id // Preserve the current organization
+    })
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[625px] max-h-[95vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[800px] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Add New Task</DialogTitle>
           <DialogDescription className="text-gray-500">
@@ -414,7 +428,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
                   })
                   return
                 }
-                setIsSummarizing(true)
+                setIsGeneratingTitle(true)
                 try {
                   const response = await fetch('/api/summarize-title', {
                     method: 'POST',
@@ -436,12 +450,13 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
                     variant: "destructive",
                   })
                 } finally {
-                  setIsSummarizing(false)
+                  setIsGeneratingTitle(false)
                 }
               }}
-              disabled={isSummarizing || !newTask.body.trim()}
+              disabled={isGeneratingTitle || !newTask.body.trim()}
+              className="transition-all duration-200 bg-secondary hover:bg-primary hover:text-secondary"
             >
-              {isSummarizing ? (
+              {isGeneratingTitle ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   <span>Generating...</span>
@@ -462,9 +477,10 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
                 variant="secondary"
                 size="sm"
                 onClick={handleSummarize}
-                disabled={isSummarizing || !newTask.body.trim()}
+                disabled={isSummarizingDescription || !newTask.body.trim()}
+                className="transition-all duration-200 bg-secondary hover:bg-primary hover:text-secondary"
               >
-                {isSummarizing ? (
+                {isSummarizingDescription ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     <span>Summarizing...</span>
@@ -597,10 +613,20 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
                 <Calendar
                   mode="single"
                   selected={newTask.due ? new Date(newTask.due) : undefined}
-                  onSelect={(date) => setNewTask({ 
-                    ...newTask, 
-                    due: date ? date.toISOString() : null 
-                  })}
+                  onSelect={(date) => {
+                    setNewTask({ 
+                      ...newTask, 
+                      due: date ? date.toISOString() : null 
+                    });
+                    // Close the popover after selection
+                    const popoverElement = document.querySelector('[data-radix-popper-content-wrapper]');
+                    if (popoverElement) {
+                      const closeButton = popoverElement.querySelector('[aria-label="Close"]');
+                      if (closeButton instanceof HTMLElement) {
+                        closeButton.click();
+                      }
+                    }
+                  }}
                   initialFocus
                 />
               </PopoverContent>
@@ -609,13 +635,22 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
         </motion.div>
 
         <DialogFooter className="flex items-center justify-between mt-6">
-          <Button
-            variant="outline"
-            onClick={() => setIsOpen(false)}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleClearForm}
+              disabled={isSubmitting}
+            >
+              Clear Form
+            </Button>
+          </div>
           <Button
             onClick={handleAddTask}
             disabled={isSubmitting || !newTask.title.trim()}
