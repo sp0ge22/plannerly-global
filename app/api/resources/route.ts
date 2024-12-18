@@ -2,6 +2,15 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
+interface Resource {
+  title: string
+  url: string
+  description: string
+  tenant_id: string
+  image_url?: string
+  category_id?: number
+}
+
 export async function GET() {
   const supabase = createRouteHandlerClient({ cookies })
 
@@ -82,7 +91,7 @@ export async function POST(request: Request) {
     }
 
     // Create resource object, excluding empty category_id
-    const resourceData: any = {
+    const resourceData: Partial<Resource> = {
       title,
       url,
       description,
