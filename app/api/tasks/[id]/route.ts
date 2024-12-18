@@ -126,7 +126,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     // Get all tenants the user is a member of
     const { data: userTenants, error: userTenantError } = await supabase
       .from('user_tenants')
-      .select('tenant_id')
+      .select('tenant_id, is_owner, is_admin')
       .eq('user_id', session.user.id)
 
     if (userTenantError) {
@@ -160,6 +160,12 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     if (taskCheckError || !taskCheck) {
       console.error('Task access error:', taskCheckError)
       return NextResponse.json({ error: 'Task not found or access denied' }, { status: 403 })
+    }
+
+    // Check if user is owner or admin of this tenant
+    const userTenant = userTenants.find(ut => ut.tenant_id === taskCheck.tenant_id)
+    if (!userTenant || (!userTenant.is_owner && !userTenant.is_admin)) {
+      return NextResponse.json({ error: 'You must be an owner or admin to delete tasks' }, { status: 403 })
     }
 
     // Verify the PIN matches the organization's PIN

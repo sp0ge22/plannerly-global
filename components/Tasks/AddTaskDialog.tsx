@@ -16,16 +16,25 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { Crown, Shield, User } from "lucide-react"
 
 type Tenant = {
   id: string
   name: string
-  avatar_url?: string
+  avatar_url?: string | null
+  is_owner: boolean
+  is_admin: boolean
 }
 
 type UserTenantResponse = {
   tenant_id: string
-  tenants: Tenant
+  is_owner: boolean
+  is_admin: boolean
+  tenants: {
+    id: string
+    name: string
+    avatar_url: string | null
+  }
 }
 
 type OrgUser = {
@@ -68,6 +77,8 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
           .from('user_tenants')
           .select(`
             tenant_id,
+            is_owner,
+            is_admin,
             tenants:tenant_id (
               id,
               name,
@@ -88,15 +99,25 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
         }
 
         const fetchedTenants = userTenants
-          .map(ut => ut.tenants)
-          .filter((tenant): tenant is Tenant => 
-            tenant !== null && 
-            'id' in tenant && 
-            'name' in tenant
-          )
+          .map(ut => ({
+            id: ut.tenants.id,
+            name: ut.tenants.name,
+            avatar_url: ut.tenants.avatar_url || undefined,
+            is_owner: ut.is_owner,
+            is_admin: ut.is_admin
+          }))
+          .sort((a, b) => {
+            // Sort by role priority: owner -> admin -> member
+            if (a.is_owner && !b.is_owner) return -1
+            if (!a.is_owner && b.is_owner) return 1
+            if (a.is_admin && !b.is_admin) return -1
+            if (!a.is_admin && b.is_admin) return 1
+            // If same role level, sort alphabetically by name
+            return a.name.localeCompare(b.name)
+          })
 
         setTenants(fetchedTenants)
-        if (fetchedTenants.length > 0 && !newTask.tenant_id) {
+        if (fetchedTenants.length > 0) {
           setNewTask(prev => ({ ...prev, tenant_id: fetchedTenants[0].id }))
         }
       }
@@ -301,11 +322,33 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
                         <AvatarImage 
                           src={tenants.find(t => t.id === newTask.tenant_id)?.avatar_url ?? undefined}
                         />
-                        <AvatarFallback className="text-xs">
+                        <AvatarFallback>
                           {(tenants.find(t => t.id === newTask.tenant_id)?.name || '??').slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <span>{tenants.find(t => t.id === newTask.tenant_id)?.name}</span>
+                      <div className="flex items-center justify-between flex-1 min-w-0">
+                        <span className="truncate">{tenants.find(t => t.id === newTask.tenant_id)?.name}</span>
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                          {tenants.find(t => t.id === newTask.tenant_id)?.is_owner && (
+                            <>
+                              <Crown className="w-3 h-3 text-yellow-500" />
+                              Owner
+                            </>
+                          )}
+                          {tenants.find(t => t.id === newTask.tenant_id)?.is_admin && !tenants.find(t => t.id === newTask.tenant_id)?.is_owner && (
+                            <>
+                              <Shield className="w-3 h-3 text-blue-500" />
+                              Admin
+                            </>
+                          )}
+                          {!tenants.find(t => t.id === newTask.tenant_id)?.is_owner && !tenants.find(t => t.id === newTask.tenant_id)?.is_admin && (
+                            <>
+                              <User className="w-3 h-3" />
+                              Member
+                            </>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </SelectValue>
@@ -316,11 +359,33 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
                     <div className="flex items-center space-x-2">
                       <Avatar className="h-5 w-5">
                         <AvatarImage src={tenant.avatar_url ?? undefined} />
-                        <AvatarFallback className="text-xs">
+                        <AvatarFallback>
                           {tenant.name.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <span>{tenant.name}</span>
+                      <div className="flex items-center justify-between flex-1 min-w-0">
+                        <span className="truncate">{tenant.name}</span>
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                          {tenant.is_owner && (
+                            <>
+                              <Crown className="w-3 h-3 text-yellow-500" />
+                              Owner
+                            </>
+                          )}
+                          {tenant.is_admin && !tenant.is_owner && (
+                            <>
+                              <Shield className="w-3 h-3 text-blue-500" />
+                              Admin
+                            </>
+                          )}
+                          {!tenant.is_owner && !tenant.is_admin && (
+                            <>
+                              <User className="w-3 h-3" />
+                              Member
+                            </>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   </SelectItem>
                 ))}

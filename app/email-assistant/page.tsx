@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Mail, Wand2, RefreshCw, MessageSquare, Plus, Trash2, Library, Sparkles, Edit2 } from 'lucide-react'
+import { Loader2, Mail, Wand2, RefreshCw, MessageSquare, Plus, Trash2, Library, Sparkles, Edit2, Crown, Shield, User } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
@@ -20,11 +20,19 @@ type Tenant = {
   id: string
   name: string
   avatar_url?: string | null
+  is_owner: boolean
+  is_admin: boolean
 }
 
 type TenantResponse = {
   tenant_id: string
-  tenants: Tenant | null
+  is_owner: boolean
+  is_admin: boolean
+  tenants: {
+    id: string
+    name: string
+    avatar_url: string | null
+  } | null
 }
 
 type EmailPrompt = {
@@ -82,6 +90,8 @@ export default function EmailAssistantPage() {
         .from('user_tenants')
         .select(`
           tenant_id,
+          is_owner,
+          is_admin,
           tenants:tenant_id (
             id,
             name,
@@ -102,23 +112,33 @@ export default function EmailAssistantPage() {
       }
 
       const fetchedTenants = userTenants
-        .map(ut => ut.tenants)
-        .filter((tenant): tenant is Tenant => 
-          tenant !== null && 
-          typeof tenant === 'object' &&
-          'id' in tenant &&
-          'name' in tenant
-        )
+        .map(ut => ({
+          id: ut.tenants?.id || '',
+          name: ut.tenants?.name || '',
+          avatar_url: ut.tenants?.avatar_url,
+          is_owner: ut.is_owner,
+          is_admin: ut.is_admin
+        }))
+        .filter(tenant => tenant.id && tenant.name)
+        .sort((a, b) => {
+          // Sort by role priority: owner -> admin -> member
+          if (a.is_owner && !b.is_owner) return -1
+          if (!a.is_owner && b.is_owner) return 1
+          if (a.is_admin && !b.is_admin) return -1
+          if (!a.is_admin && b.is_admin) return 1
+          // If same role level, sort alphabetically by name
+          return a.name.localeCompare(b.name)
+        })
 
       setTenants(fetchedTenants)
-      if (fetchedTenants.length > 0 && !selectedTenant) {
+      if (fetchedTenants.length > 0) {
         setSelectedTenant(fetchedTenants[0].id)
         setNewPrompt(prev => ({ ...prev, tenant_id: fetchedTenants[0].id }))
       }
     }
 
     fetchTenants()
-  }, [supabase, selectedTenant])
+  }, [supabase])
 
   useEffect(() => {
     const fetchPrompts = async () => {
@@ -550,7 +570,29 @@ export default function EmailAssistantPage() {
                               {tenants.find(t => t.id === selectedTenant)?.name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <span>{tenants.find(t => t.id === selectedTenant)?.name}</span>
+                          <div className="flex items-center justify-between flex-1 min-w-0">
+                            <span className="truncate">{tenants.find(t => t.id === selectedTenant)?.name}</span>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                              {tenants.find(t => t.id === selectedTenant)?.is_owner && (
+                                <>
+                                  <Crown className="w-3 h-3 text-yellow-500" />
+                                  Owner
+                                </>
+                              )}
+                              {tenants.find(t => t.id === selectedTenant)?.is_admin && !tenants.find(t => t.id === selectedTenant)?.is_owner && (
+                                <>
+                                  <Shield className="w-3 h-3 text-blue-500" />
+                                  Admin
+                                </>
+                              )}
+                              {!tenants.find(t => t.id === selectedTenant)?.is_owner && !tenants.find(t => t.id === selectedTenant)?.is_admin && (
+                                <>
+                                  <User className="w-3 h-3" />
+                                  Member
+                                </>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       )}
                     </SelectValue>
@@ -565,7 +607,29 @@ export default function EmailAssistantPage() {
                               {tenant.name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <span>{tenant.name}</span>
+                          <div className="flex items-center justify-between flex-1 min-w-0">
+                            <span className="truncate">{tenant.name}</span>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                              {tenant.is_owner && (
+                                <>
+                                  <Crown className="w-3 h-3 text-yellow-500" />
+                                  Owner
+                                </>
+                              )}
+                              {tenant.is_admin && !tenant.is_owner && (
+                                <>
+                                  <Shield className="w-3 h-3 text-blue-500" />
+                                  Admin
+                                </>
+                              )}
+                              {!tenant.is_owner && !tenant.is_admin && (
+                                <>
+                                  <User className="w-3 h-3" />
+                                  Member
+                                </>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       </SelectItem>
                     ))}

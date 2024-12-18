@@ -7,18 +7,32 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Crown, User, Pencil } from 'lucide-react'
+import { Loader2, Crown, User, Pencil, Shield, Trash2, UserMinus, ImageIcon, InfoIcon } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from 'next/navigation'
 import { PostgrestError } from '@supabase/supabase-js'
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+
+interface TenantResponse {
+  tenant_id: string
+  is_owner: boolean
+  is_admin: boolean
+  tenants: {
+    id: string
+    name: string
+    avatar_url: string | null
+    pin: string | null
+  }
+}
 
 interface OrgMember {
   user_id: string
   is_owner: boolean
+  is_admin: boolean
   profile: {
     name: string | null
     email: string | null
@@ -29,6 +43,7 @@ interface OrgMember {
 interface UserTenant {
   tenant_id: string
   is_owner: boolean
+  is_admin: boolean
   tenants: {
     id: string
     name: string
@@ -58,119 +73,163 @@ export default function SettingsPage() {
   const [isJoiningOrg, setIsJoiningOrg] = useState(false)
   const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState('')
+  const [pinValue, setPinValue] = useState('')
   const [organizations, setOrganizations] = useState<Array<{
-    id: string;
-    name: string;
-    is_owner: boolean;
-    avatar_url: string | null;
-    pin: string | null;
+    id: string
+    name: string
+    is_owner: boolean
+    is_admin: boolean
+    avatar_url: string | null
+    pin: string | null
   }>>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [newPrompt, setNewPrompt] = useState({
+    tenant_id: '',
+    title: '',
+    prompt: '',
+    description: null as string | null,
+    type: 'response' as 'response' | 'rewrite'
+  })
   const supabase = createClientComponentClient()
   const { toast } = useToast()
   const router = useRouter()
+  const [memberActionDialog, setMemberActionDialog] = useState<{
+    isOpen: boolean;
+    action: 'make_admin' | 'remove_admin' | 'remove_member';
+    memberId: string;
+    memberName: string;
+  } | null>(null);
+  const [showPinInfoDialog, setShowPinInfoDialog] = useState(false)
 
   useEffect(() => {
-    const loadProfile = async () => {
-      setIsLoading(true)
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session?.user) {
-          // Load profile data
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('name, avatar_url')
-            .eq('id', session.user.id)
-            .single()
+    const fetchTenants = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-          if (profileError) throw profileError
-          if (profileData) {
-            setName(profileData.name || '')
-            setAvatarUrl(profileData.avatar_url)
-          }
+      // Fetch user profile including avatar
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name, avatar_url')
+        .eq('id', user.id)
+        .single()
 
-          // Get all user's tenant relationships and tenant details
-          const { data: userTenants, error: userTenantError } = await supabase
-            .from('user_tenants')
-            .select(`
-              tenant_id,
-              is_owner,
-              tenants (
-                id,
-                name,
-                avatar_url,
-                pin
-              )
-            `)
-            .eq('user_id', session.user.id) as { data: UserTenant[] | null, error: PostgrestError }
+      if (profile) {
+        setName(profile.name || '')
+        setAvatarUrl(profile.avatar_url)
+      }
 
-          if (userTenantError) throw userTenantError
+      const { data: userTenants, error } = await supabase
+        .from('user_tenants')
+        .select(`
+          tenant_id,
+          is_owner,
+          is_admin,
+          tenants:tenant_id (
+            id,
+            name,
+            avatar_url,
+            pin
+          )
+        `)
+        .eq('user_id', user.id)
+        .returns<TenantResponse[]>()
 
-          if (userTenants) {
-            const orgs = userTenants.map(ut => ({
-              id: ut.tenant_id,
-              name: ut.tenants.name,
-              is_owner: ut.is_owner,
-              avatar_url: ut.tenants.avatar_url,
-              pin: ut.tenants.pin
-            }))
-            setOrganizations(orgs)
-            
-            // Set the first organization as selected by default
-            if (orgs.length > 0 && !selectedOrgId) {
-              setSelectedOrgId(orgs[0].id)
-            }
-
-            // Get members for the selected organization
-            if (selectedOrgId) {
-              const { data: orgMembers, error: membersError } = await supabase
-                .from('user_tenants')
-                .select('user_id, is_owner')
-                .eq('tenant_id', selectedOrgId)
-
-              if (membersError) throw membersError
-
-              if (orgMembers) {
-                // Get profiles for all members
-                const userIds = orgMembers.map(member => member.user_id)
-                const { data: profiles, error: profilesError } = await supabase
-                  .from('profiles')
-                  .select('id, name, avatar_letter, avatar_color, email, avatar_url')
-                  .in('id', userIds)
-
-                if (profilesError) throw profilesError
-
-                const formattedMembers: OrgMember[] = orgMembers.map(member => {
-                  const profile = profiles?.find(p => p.id === member.user_id)
-                  return {
-                    user_id: member.user_id,
-                    is_owner: member.is_owner,
-                    profile: {
-                      email: profile?.email || null,
-                      name: profile?.name || null,
-                      avatar_url: profile?.avatar_url || null
-                    }
-                  }
-                })
-                setMembers(formattedMembers)
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error loading data:', error)
+      if (error) {
+        console.error('Error fetching tenants:', error)
         toast({
-          title: "Error loading settings",
-          description: "Please try again later.",
+          title: "Error fetching organizations",
+          description: "Could not load your organizations.",
           variant: "destructive",
         })
-      } finally {
-        setIsLoading(false)
+        return
+      }
+
+      const fetchedTenants = userTenants
+        .map(ut => ({
+          id: ut.tenants.id,
+          name: ut.tenants.name,
+          is_owner: ut.is_owner,
+          is_admin: ut.is_admin,
+          avatar_url: ut.tenants.avatar_url,
+          pin: ut.tenants.pin
+        }))
+        .sort((a, b) => {
+          // Sort by role priority: owner -> admin -> member
+          if (a.is_owner && !b.is_owner) return -1
+          if (!a.is_owner && b.is_owner) return 1
+          if (a.is_admin && !b.is_admin) return -1
+          if (!a.is_admin && b.is_admin) return 1
+          // If same role level, sort alphabetically by name
+          return a.name.localeCompare(b.name)
+        })
+
+      setOrganizations(fetchedTenants)
+      
+      // Set the first organization as selected by default
+      if (fetchedTenants.length > 0 && !selectedOrgId) {
+        setSelectedOrgId(fetchedTenants[0].id)
+      }
+
+      // Update newPrompt tenant_id if needed
+      if (fetchedTenants.length > 0) {
+        setNewPrompt(prev => ({ ...prev, tenant_id: fetchedTenants[0].id }))
+      }
+
+      // Fetch members if an organization is selected
+      if (selectedOrgId) {
+        setIsLoading(true)
+        try {
+          const { data: orgMembers, error: membersError } = await supabase
+            .from('user_tenants')
+            .select(`
+              user_id,
+              is_owner,
+              is_admin
+            `)
+            .eq('tenant_id', selectedOrgId)
+
+          if (membersError) throw membersError
+
+          if (orgMembers) {
+            // Get profiles for all members
+            const userIds = orgMembers.map(member => member.user_id)
+            const { data: profiles, error: profilesError } = await supabase
+              .from('profiles')
+              .select('id, name, email, avatar_url')
+              .in('id', userIds)
+
+            if (profilesError) throw profilesError
+
+            const formattedMembers: OrgMember[] = orgMembers.map(member => {
+              const profile = profiles?.find(p => p.id === member.user_id)
+              return {
+                user_id: member.user_id,
+                is_owner: member.is_owner,
+                is_admin: member.is_admin,
+                profile: {
+                  email: profile?.email || null,
+                  name: profile?.name || null,
+                  avatar_url: profile?.avatar_url || null
+                }
+              }
+            })
+            setMembers(formattedMembers)
+          }
+        } catch (error) {
+          console.error('Error fetching members:', error)
+          toast({
+            title: "Error loading members",
+            description: "Could not load organization members.",
+            variant: "destructive",
+          })
+        } finally {
+          setIsLoading(false)
+        }
       }
     }
 
-    loadProfile()
+    fetchTenants()
   }, [supabase, toast, selectedOrgId])
 
   const handleSave = async () => {
@@ -424,6 +483,184 @@ export default function SettingsPage() {
     }
   }
 
+  const toggleAdmin = async (userId: string, tenantId: string, makeAdmin: boolean) => {
+    try {
+      const response = await fetch('/api/user-tenants/update-role', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          tenant_id: tenantId,
+          is_admin: makeAdmin
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update role')
+      }
+
+      // Update local state
+      setMembers(members.map(member => 
+        member.user_id === userId 
+          ? { ...member, is_admin: makeAdmin }
+          : member
+      ))
+
+      toast({
+        title: "Role updated",
+        description: `User ${makeAdmin ? 'promoted to' : 'removed from'} admin role.`,
+      })
+    } catch (error) {
+      console.error('Error updating role:', error)
+      toast({
+        title: "Error updating role",
+        description: "Could not update user role.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleMemberAction = async (pin: string) => {
+    if (!memberActionDialog || !selectedOrgId) return;
+    
+    try {
+      // First verify the PIN
+      const pinResponse = await fetch('/api/verify-org-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: selectedOrgId,
+          pin: pin
+        }),
+      });
+
+      if (!pinResponse.ok) {
+        throw new Error('Invalid PIN');
+      }
+
+      // Perform the action based on type
+      if (memberActionDialog.action === 'remove_member') {
+        const response = await fetch('/api/user-tenants/remove-member', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: memberActionDialog.memberId,
+            tenant_id: selectedOrgId
+          }),
+        });
+
+        if (!response.ok) throw new Error('Failed to remove member');
+
+        // Update local state
+        setMembers(members.filter(m => m.user_id !== memberActionDialog.memberId));
+      } else {
+        // Toggle admin status
+        const makeAdmin = memberActionDialog.action === 'make_admin';
+        await toggleAdmin(memberActionDialog.memberId, selectedOrgId, makeAdmin);
+      }
+
+      setMemberActionDialog(null);
+      setPinValue('');
+
+      toast({
+        title: "Success",
+        description: memberActionDialog.action === 'remove_member'
+          ? "Member removed successfully"
+          : memberActionDialog.action === 'make_admin'
+            ? "User promoted to admin"
+            : "Admin role removed",
+      });
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Action failed",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleOrgAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploading(true)
+
+      const file = event.target.files?.[0]
+      if (!file || !selectedOrgId) return
+
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
+      const filePath = `${selectedOrgId}/${fileName}`
+
+      // First check if there's an existing avatar to remove
+      const currentOrg = organizations.find(org => org.id === selectedOrgId)
+      if (currentOrg?.avatar_url) {
+        const oldPath = currentOrg.avatar_url.split('/').slice(-2).join('/')
+        try {
+          await supabase.storage
+            .from('org-avatars')
+            .remove([oldPath])
+        } catch (error) {
+          console.error('Error removing old avatar:', error)
+        }
+      }
+
+      // Upload new file
+      const { error: uploadError, data } = await supabase.storage
+        .from('org-avatars')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (uploadError) {
+        console.error('Upload error details:', uploadError)
+        throw new Error(`Upload failed: ${uploadError.message}`)
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('org-avatars')
+        .getPublicUrl(filePath)
+
+      // Update tenant record
+      const { error: updateError } = await supabase
+        .from('tenants')
+        .update({ avatar_url: publicUrl })
+        .eq('id', selectedOrgId)
+
+      if (updateError) {
+        console.error('Update error details:', updateError)
+        throw new Error(`Database update failed: ${updateError.message}`)
+      }
+
+      // Update local state
+      setOrganizations(orgs =>
+        orgs.map(org =>
+          org.id === selectedOrgId
+            ? { ...org, avatar_url: publicUrl }
+            : org
+        )
+      )
+
+      toast({
+        title: "Success",
+        description: "Organization avatar updated successfully",
+      })
+
+      // Add refresh here
+      router.refresh()
+    } catch (error) {
+      console.error('Error uploading avatar:', error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "There was an error uploading the avatar",
+        variant: "destructive",
+      })
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-neutral-50">
       <main className="flex-1 p-6">
@@ -442,9 +679,11 @@ export default function SettingsPage() {
                     <h3 className="text-sm font-medium text-muted-foreground mb-4">Profile Picture</h3>
                     <div className="flex items-start space-x-6">
                       <Avatar className="h-20 w-20">
-                        <AvatarImage src={avatarUrl ?? undefined} />
-                        <AvatarFallback className="bg-muted">
-                          <User className="h-10 w-10 text-muted-foreground" />
+                        <AvatarImage src={avatarUrl || undefined} alt="Profile picture" />
+                        <AvatarFallback>
+                          {name ? name.slice(0, 2).toUpperCase() : (
+                            <User className="h-10 w-10 text-muted-foreground" />
+                          )}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col space-y-3">
@@ -588,7 +827,7 @@ export default function SettingsPage() {
                               : 'border-muted hover:border-primary/50'
                           }`}
                         >
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                             <div className="flex items-start justify-between">
                               <div className="flex items-start space-x-4">
                                 <Avatar className="h-12 w-12">
@@ -603,13 +842,16 @@ export default function SettingsPage() {
                                     {org.is_owner && (
                                       <Crown className="w-4 h-4 ml-2 text-yellow-500" />
                                     )}
+                                    {org.is_admin && !org.is_owner && (
+                                      <Shield className="w-4 h-4 ml-2 text-blue-500" />
+                                    )}
                                   </h3>
-                                  <div className="space-y-1">
+                                  <div className="flex flex-col space-y-1">
                                     <span className="text-sm text-muted-foreground">
-                                      {org.is_owner ? 'Owner' : 'Member'}
+                                      {org.is_owner ? 'Owner' : org.is_admin ? 'Admin' : 'Member'}
                                     </span>
                                     <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                                      <span>Organization ID:</span>
+                                      <span>ID:</span>
                                       <code className="text-xs font-mono px-1 py-0.5 bg-muted rounded">
                                         {org.id}
                                       </code>
@@ -627,19 +869,31 @@ export default function SettingsPage() {
                             </div>
                             
                             {org.is_owner && (
-                              <div className="pt-2 border-t">
+                              <div className="flex items-center gap-2 pt-2 border-t">
                                 <Button
-                                  variant="ghost"
+                                  variant="outline"
                                   size="sm"
-                                  className="w-full justify-start text-muted-foreground hover:text-foreground"
+                                  className="flex-1 gap-2"
                                   onClick={() => {
                                     setSelectedOrgId(org.id)
                                     setNewOrgName(org.name)
                                     setIsEditingOrgName(true)
                                   }}
                                 >
-                                  <Pencil className="w-4 h-4 mr-2" />
+                                  <Pencil className="w-4 h-4" />
                                   Edit Organization
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-2"
+                                  onClick={() => {
+                                    setSelectedOrgId(org.id)
+                                    setShowPinInfoDialog(true)
+                                  }}
+                                >
+                                  <Shield className="w-4 h-4" />
+                                  Manage PIN
                                 </Button>
                               </div>
                             )}
@@ -657,30 +911,103 @@ export default function SettingsPage() {
                           </p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {members.map((member) => (
-                            <div 
-                              key={member.user_id}
-                              className="flex items-center space-x-4 p-3 rounded-lg border bg-card"
-                            >
-                              <Avatar className="w-10 h-10">
-                                <AvatarImage src={member.profile.avatar_url ?? undefined} />
-                                <AvatarFallback className="bg-muted">
-                                  <User className="h-5 w-5 text-muted-foreground" />
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate flex items-center">
-                                  {member.profile.name || member.profile.email}
-                                  {member.is_owner && (
-                                    <Crown className="w-4 h-4 ml-2 text-yellow-500 flex-shrink-0" />
+                          {[...members]
+                            .sort((a, b) => {
+                              // First sort by role priority
+                              if (a.is_owner && !b.is_owner) return -1;
+                              if (!a.is_owner && b.is_owner) return 1;
+                              if (a.is_admin && !b.is_admin) return -1;
+                              if (!a.is_admin && b.is_admin) return 1;
+                              
+                              // Then sort by name/email
+                              const aName = a.profile.name || a.profile.email || '';
+                              const bName = b.profile.name || b.profile.email || '';
+                              return aName.localeCompare(bName);
+                            })
+                            .map((member) => (
+                              <div 
+                                key={member.user_id}
+                                className="flex flex-col p-4 rounded-lg border bg-card"
+                              >
+                                <div className="flex items-center justify-between gap-4">
+                                  <div className="flex items-center space-x-4 flex-1 min-w-0">
+                                    <Avatar className="w-10 h-10">
+                                      <AvatarImage src={member.profile.avatar_url ?? undefined} />
+                                      <AvatarFallback className="bg-muted">
+                                        <User className="h-5 w-5 text-muted-foreground" />
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium truncate flex items-center gap-2">
+                                        {member.profile.name || member.profile.email}
+                                        {member.is_owner && (
+                                          <Crown className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                                        )}
+                                        {member.is_admin && !member.is_owner && (
+                                          <Shield className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col gap-0.5 text-sm">
+                                        <div className="flex items-center gap-1 text-muted-foreground">
+                                          {member.is_owner ? (
+                                            <>
+                                              <Crown className="w-3 h-3 text-yellow-500" />
+                                              <span>Owner</span>
+                                            </>
+                                          ) : member.is_admin ? (
+                                            <>
+                                              <Shield className="w-3 h-3 text-blue-500" />
+                                              <span>Admin</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <User className="w-3 h-3" />
+                                              <span>Member</span>
+                                            </>
+                                          )}
+                                        </div>
+                                        <div className="text-muted-foreground/70 truncate">
+                                          {member.profile.email}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {selectedOrgId && organizations.find(org => org.id === selectedOrgId)?.is_owner && !member.is_owner && (
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        variant={member.is_admin ? "outline" : "default"}
+                                        size="sm"
+                                        onClick={() => setMemberActionDialog({
+                                          isOpen: true,
+                                          action: member.is_admin ? 'remove_admin' : 'make_admin',
+                                          memberId: member.user_id,
+                                          memberName: member.profile.name || member.profile.email || 'Unknown User'
+                                        })}
+                                        className="gap-2 whitespace-nowrap"
+                                      >
+                                        <Shield className={`w-4 h-4 ${member.is_admin ? 'text-blue-500' : ''}`} />
+                                        {member.is_admin ? 'Remove Admin' : 'Make Admin'}
+                                      </Button>
+                                      <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => setMemberActionDialog({
+                                          isOpen: true,
+                                          action: 'remove_member',
+                                          memberId: member.user_id,
+                                          memberName: member.profile.name || member.profile.email || 'Unknown User'
+                                        })}
+                                        className="gap-2"
+                                      >
+                                        <UserMinus className="w-4 h-4" />
+                                        Remove
+                                      </Button>
+                                    </div>
                                   )}
                                 </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {member.is_owner ? 'Owner' : 'Member'}
-                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
 
                           {isLoading && (
                             <div className="col-span-2 flex justify-center p-4">
@@ -738,158 +1065,89 @@ export default function SettingsPage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Edit Organization</DialogTitle>
+                  <DialogDescription>
+                    Update your organization's profile
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-6">
-                  <div className="flex items-center space-x-6">
-                    <Avatar className="h-24 w-24">
-                      <AvatarImage 
-                        src={organizations.find(org => org.id === selectedOrgId)?.avatar_url ?? undefined}
-                      />
-                      <AvatarFallback>
-                        {newOrgName.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col space-y-3">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        disabled={uploading}
-                        onClick={() => document.getElementById('org-avatar-upload')?.click()}
-                        className="w-[140px]"
-                      >
-                        {uploading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          'Change Picture'
-                        )}
-                      </Button>
-                      <input
-                        type="file"
-                        id="org-avatar-upload"
-                        className="hidden"
-                        accept="image/*"
-                        onChange={async (event) => {
-                          try {
-                            setUploading(true)
-                            const file = event.target.files?.[0]
-                            if (!file || !selectedOrgId) return
-
-                            const fileExt = file.name.split('.').pop()
-                            const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
-                            const filePath = `${selectedOrgId}/${fileName}`
-
-                            // First check if there's an existing avatar to remove
-                            const currentOrg = organizations.find(org => org.id === selectedOrgId)
-                            if (currentOrg?.avatar_url) {
-                              const oldPath = currentOrg.avatar_url.split('/').slice(-2).join('/')
-                              try {
-                                await supabase.storage
-                                  .from('org-avatars')
-                                  .remove([oldPath])
-                              } catch (error) {
-                                console.error('Error removing old avatar:', error)
-                              }
-                            }
-
-                            // Upload new file
-                            const { error: uploadError, data } = await supabase.storage
-                              .from('org-avatars')
-                              .upload(filePath, file, {
-                                cacheControl: '3600',
-                                upsert: false
-                              })
-
-                            if (uploadError) {
-                              console.error('Upload error details:', uploadError)
-                              throw new Error(`Upload failed: ${uploadError.message}`)
-                            }
-
-                            // Get public URL
-                            const { data: { publicUrl } } = supabase.storage
-                              .from('org-avatars')
-                              .getPublicUrl(filePath)
-
-                            // Update tenant record
-                            const { error: updateError } = await supabase
-                              .from('tenants')
-                              .update({ avatar_url: publicUrl })
-                              .eq('id', selectedOrgId)
-
-                            if (updateError) {
-                              console.error('Update error details:', updateError)
-                              throw new Error(`Database update failed: ${updateError.message}`)
-                            }
-
-                            // Update local state
-                            setOrganizations(orgs =>
-                              orgs.map(org =>
-                                org.id === selectedOrgId
-                                  ? { ...org, avatar_url: publicUrl }
-                                  : org
-                              )
-                            )
-
-                            toast({
-                              title: "Success",
-                              description: "Organization avatar updated successfully",
-                            })
-                          } catch (error) {
-                            console.error('Error uploading avatar:', error)
-                            toast({
-                              title: "Error",
-                              description: error instanceof Error ? error.message : "There was an error uploading the avatar",
-                              variant: "destructive",
-                            })
-                          } finally {
-                            setUploading(false)
-                          }
-                        }}
-                        disabled={uploading}
-                      />
-                      <p className="text-[13px] text-muted-foreground">
-                        JPG, GIF or PNG. Max size of 2MB.
-                      </p>
+                  <div className="bg-muted p-4 rounded-lg space-y-4">
+                    <div className="flex items-center gap-4">
+                      <Avatar className="h-20 w-20">
+                        <AvatarImage 
+                          src={organizations.find(org => org.id === selectedOrgId)?.avatar_url ?? undefined}
+                        />
+                        <AvatarFallback>
+                          {newOrgName.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium">Organization Picture</h4>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          This will be displayed across all organization pages
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          disabled={uploading}
+                          onClick={() => document.getElementById('org-avatar-upload')?.click()}
+                          className="w-[140px]"
+                        >
+                          {uploading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <ImageIcon className="w-4 h-4 mr-2" />
+                              Change Picture
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="org-name">Organization Name</Label>
-                    <Input
-                      id="org-name"
-                      value={newOrgName}
-                      onChange={(e) => setNewOrgName(e.target.value)}
-                      placeholder="Enter organization name"
+                    <input
+                      type="file"
+                      id="org-avatar-upload"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleOrgAvatarUpload}
+                      disabled={uploading}
                     />
+                    <div className="text-[13px] text-muted-foreground flex items-center gap-1">
+                      <InfoIcon className="w-3 h-3" />
+                      <span>JPG, GIF or PNG. Max size of 2MB.</span>
+                    </div>
                   </div>
 
-                  {organizations.find(org => org.id === selectedOrgId)?.is_owner && (
+                  <div className="bg-muted p-4 rounded-lg space-y-3">
                     <div className="space-y-2">
-                      <Label htmlFor="org-pin">Organization PIN (4 digits)</Label>
-                      <Input
-                        id="org-pin"
-                        value={pin}
-                        onChange={(e) => {
-                          // Only allow numbers and limit to 4 digits
-                          const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
-                          setPin(value)
-                          setPinError('')
-                        }}
-                        placeholder="Enter 4-digit PIN"
-                        maxLength={4}
-                        pattern="[0-9]*"
-                        inputMode="numeric"
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        You will need this PIN to delete items in your organization.
-                      </p>
-                      {pinError && (
-                        <p className="text-sm text-destructive">{pinError}</p>
-                      )}
+                      <h4 className="font-medium">Organization Details</h4>
+                      <div className="space-y-2">
+                        <Label htmlFor="org-name">Organization Name</Label>
+                        <Input
+                          id="org-name"
+                          value={newOrgName}
+                          onChange={(e) => setNewOrgName(e.target.value)}
+                          placeholder="Enter organization name"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 text-[13px] text-muted-foreground mt-2">
+                        <InfoIcon className="w-3 h-3" />
+                        <span>This name will be visible to all members of your organization</span>
+                      </div>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-yellow-500" />
+                      <h4 className="font-medium">Owner Settings</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      As the owner, you can manage organization settings, members, and security preferences. Use the Manage PIN option to update your organization's security PIN.
+                    </p>
+                  </div>
                 </div>
                 <DialogFooter className="mt-6">
                   <Button
@@ -897,8 +1155,6 @@ export default function SettingsPage() {
                     onClick={() => {
                       setIsEditingOrgName(false)
                       setNewOrgName('')
-                      setPin('')
-                      setPinError('')
                     }}
                   >
                     Cancel
@@ -907,27 +1163,13 @@ export default function SettingsPage() {
                     onClick={async () => {
                       if (!selectedOrgId || !newOrgName.trim()) return
                       
-                      // Validate PIN if it's being changed
-                      if (pin) {
-                        if (!/^\d{4}$/.test(pin)) {
-                          setPinError('PIN must be exactly 4 digits')
-                          return
-                        }
-                      }
-                      
                       try {
-                        const updates: { name: string; pin?: string } = {
-                          name: newOrgName.trim()
-                        }
-                        
-                        // Only include PIN in update if it's changed
-                        if (pin) {
-                          updates.pin = pin
-                        }
-
                         const { error } = await supabase
                           .from('tenants')
-                          .update(updates)
+                          .update({ 
+                            name: newOrgName.trim(),
+                            updated_at: new Date().toISOString()
+                          })
                           .eq('id', selectedOrgId)
 
                         if (error) throw error
@@ -936,25 +1178,26 @@ export default function SettingsPage() {
                         setOrganizations(orgs => 
                           orgs.map(org => 
                             org.id === selectedOrgId 
-                              ? { ...org, name: newOrgName.trim(), pin: pin || org.pin }
+                              ? { ...org, name: newOrgName.trim() }
                               : org
                           )
                         )
 
                         setIsEditingOrgName(false)
                         setNewOrgName('')
-                        setPin('')
-                        setPinError('')
 
                         toast({
                           title: "Organization updated",
-                          description: "The organization settings have been updated successfully.",
+                          description: "The organization name has been updated successfully.",
                         })
+
+                        // Refresh the page
+                        router.refresh()
                       } catch (error) {
                         console.error('Error updating organization:', error)
                         toast({
                           title: "Error updating organization",
-                          description: "There was an error updating the organization settings. Please try again.",
+                          description: "There was an error updating the organization name. Please try again.",
                           variant: "destructive",
                         })
                       }
@@ -962,6 +1205,227 @@ export default function SettingsPage() {
                     disabled={!newOrgName.trim()}
                   >
                     Save Changes
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Add member action dialog */}
+            <Dialog 
+              open={memberActionDialog?.isOpen} 
+              onOpenChange={(open) => {
+                if (!open) {
+                  setMemberActionDialog(null);
+                  setPinValue('');
+                }
+              }}
+            >
+              <DialogContent className="sm:max-w-[400px]">
+                <DialogHeader>
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-16 w-16">
+                      <AvatarImage src={organizations.find(org => org.id === selectedOrgId)?.avatar_url ?? undefined} />
+                      <AvatarFallback>
+                        {organizations.find(org => org.id === selectedOrgId)?.name.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <DialogTitle className="text-xl">Confirm Action</DialogTitle>
+                      <DialogDescription className="mt-1">
+                        Enter organization PIN to continue
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+                <div className="mt-6">
+                  <div className="space-y-4">
+                    <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                      <h4 className="font-medium text-sm">Action Details:</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {memberActionDialog?.action === 'remove_member' 
+                          ? `Remove ${memberActionDialog?.memberName} from organization`
+                          : memberActionDialog?.action === 'make_admin'
+                            ? `Promote ${memberActionDialog?.memberName} to admin`
+                            : `Remove admin role from ${memberActionDialog?.memberName}`}
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      <Label htmlFor="pin" className="text-sm font-medium">
+                        Organization PIN
+                      </Label>
+                      <Input
+                        id="pin"
+                        type="password"
+                        value={pinValue}
+                        onChange={(e) => setPinValue(e.target.value)}
+                        placeholder="Enter 4-digit PIN"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        inputMode="numeric"
+                        className="text-lg tracking-widest"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Contact your organization owner if you don't know the PIN
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter className="mt-6 gap-2 sm:gap-0">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setMemberActionDialog(null);
+                      setPinValue('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant={memberActionDialog?.action === 'remove_member' ? 'destructive' : 'default'}
+                    onClick={() => handleMemberAction(pinValue)}
+                    disabled={!pinValue.trim() || pinValue.length !== 4}
+                    className="gap-2"
+                  >
+                    {memberActionDialog?.action === 'remove_member' ? (
+                      <>
+                        <UserMinus className="w-4 h-4" />
+                        Remove Member
+                      </>
+                    ) : memberActionDialog?.action === 'make_admin' ? (
+                      <>
+                        <Shield className="w-4 h-4" />
+                        Make Admin
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="w-4 h-4" />
+                        Remove Admin
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Add PIN info dialog */}
+            <Dialog open={showPinInfoDialog} onOpenChange={setShowPinInfoDialog}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Organization PIN</DialogTitle>
+                  <DialogDescription>
+                    Manage your organization's security PIN
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  {/* Current PIN display for owners */}
+                  {organizations.find(org => org.id === selectedOrgId)?.is_owner && (
+                    <div className="bg-muted p-4 rounded-lg space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="org-pin">Organization PIN</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="org-pin"
+                            value={pin}
+                            onChange={(e) => {
+                              // Only allow numbers and limit to 4 digits
+                              const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+                              setPin(value)
+                              setPinError('')
+                            }}
+                            placeholder="Enter 4-digit PIN"
+                            maxLength={4}
+                            pattern="[0-9]*"
+                            inputMode="numeric"
+                            className="text-lg tracking-widest"
+                          />
+                          <Button
+                            onClick={async () => {
+                              if (!/^\d{4}$/.test(pin)) {
+                                setPinError('PIN must be exactly 4 digits')
+                                return
+                              }
+                              
+                              try {
+                                const { error } = await supabase
+                                  .from('tenants')
+                                  .update({ pin })
+                                  .eq('id', selectedOrgId)
+
+                                if (error) throw error
+
+                                // Update local state
+                                setOrganizations(orgs => 
+                                  orgs.map(org => 
+                                    org.id === selectedOrgId 
+                                      ? { ...org, pin }
+                                      : org
+                                  )
+                                )
+
+                                toast({
+                                  title: "PIN updated",
+                                  description: "The organization PIN has been updated successfully.",
+                                })
+                              } catch (error) {
+                                console.error('Error updating PIN:', error)
+                                toast({
+                                  title: "Error updating PIN",
+                                  description: "There was an error updating the PIN. Please try again.",
+                                  variant: "destructive",
+                                })
+                              }
+                            }}
+                            disabled={!pin || pin.length !== 4}
+                          >
+                            Update PIN
+                          </Button>
+                        </div>
+                        {pinError && (
+                          <p className="text-sm text-destructive">{pinError}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PIN Information Section */}
+                  <div className="bg-muted p-4 rounded-lg space-y-3">
+                    <h4 className="font-medium">What is the PIN used for?</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The organization PIN is a security measure that helps protect sensitive actions within your organization. It's required when:
+                    </p>
+                    <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                      <li>Removing members from the organization</li>
+                      <li>Changing member roles (admin status)</li>
+                      <li>Deleting organization resources</li>
+                    </ul>
+                  </div>
+                  
+                  <div className="bg-muted p-4 rounded-lg space-y-3">
+                    <h4 className="font-medium">Who should know the PIN?</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The PIN can be shared with trusted administrators who need to perform these actions. As the owner, you can change the PIN at any time.
+                    </p>
+                  </div>
+
+                  <div className="bg-yellow-50 p-4 rounded-lg space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-yellow-600" />
+                      <h4 className="font-medium text-yellow-800">Security Note</h4>
+                    </div>
+                    <p className="text-sm text-yellow-800">
+                      Keep your PIN secure and only share it with trusted administrators. You can change the PIN anytime if you suspect it has been compromised.
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    onClick={() => {
+                      setShowPinInfoDialog(false)
+                      setPin('')
+                      setPinError('')
+                    }}
+                  >
+                    Close
                   </Button>
                 </DialogFooter>
               </DialogContent>
