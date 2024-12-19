@@ -40,6 +40,7 @@ type EmailPrompt = {
   type: EmailType
   tenant_id: string
   created_by: string
+  created_at: string
   tenant: {
     name: string
     avatar_url: string | null
@@ -582,6 +583,12 @@ export default function PromptLibraryPage() {
                                 </Avatar>
                                 <span>{prompt.creator.name}</span>
                               </span>
+                              <span>•</span>
+                              <span>{new Date(prompt.created_at).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              })}</span>
                             </div>
                           </CardHeader>
                           <AnimatePresence initial={false}>
@@ -666,6 +673,12 @@ export default function PromptLibraryPage() {
                                 </Avatar>
                                 <span>{prompt.creator.name}</span>
                               </span>
+                              <span>•</span>
+                              <span>{new Date(prompt.created_at).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              })}</span>
                             </div>
                           </CardHeader>
                           <AnimatePresence initial={false}>
