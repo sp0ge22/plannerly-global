@@ -341,19 +341,19 @@ export default function ResourcesPage() {
               </Button>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="relative flex-grow">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full">
+              <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
                   placeholder="Search resources..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 bg-neutral-50"
+                  className="pl-9 bg-neutral-50 w-full"
                 />
               </div>
-              <div className="flex items-center space-x-2 min-w-[200px]">
+              <div className="flex items-center space-x-2 justify-end">
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="bg-neutral-50">
+                  <SelectTrigger className="bg-neutral-50 w-[200px]">
                     <Folder className="w-4 h-4 mr-2 text-gray-400" />
                     <SelectValue placeholder="All Categories" />
                   </SelectTrigger>
@@ -367,9 +367,13 @@ export default function ResourcesPage() {
                   </SelectContent>
                 </Select>
                 <Select value={selectedTenant} onValueChange={setSelectedTenant}>
-                  <SelectTrigger className="bg-neutral-50">
-                    <SelectValue placeholder="All Organizations">
-                      {selectedTenant !== 'all' && (
+                  <SelectTrigger className="bg-neutral-50 w-[200px]">
+                    <SelectValue>
+                      {selectedTenant === 'all' ? (
+                        <div className="flex items-center space-x-2">
+                          <span>All Organizations</span>
+                        </div>
+                      ) : (
                         <div className="flex items-center space-x-2">
                           <Avatar className="h-5 w-5">
                             <AvatarImage 

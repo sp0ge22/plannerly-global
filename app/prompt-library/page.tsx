@@ -459,252 +459,241 @@ export default function PromptLibraryPage() {
             </div>
           </div>
 
-          <div className="flex space-x-4">
-            <div className="w-64">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Filters</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Organization</Label>
-                    <Select
-                      value={selectedTenant}
-                      onValueChange={setSelectedTenant}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Organizations" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_all">All Organizations</SelectItem>
-                        {tenants.map((tenant) => (
-                          <SelectItem key={tenant.id} value={tenant.id}>
-                            <div className="flex items-center space-x-2">
-                              <Avatar className="h-5 w-5">
-                                <AvatarImage src={tenant.avatar_url || undefined} />
-                                <AvatarFallback>
-                                  {tenant.name.slice(0, 2).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span>{tenant.name}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Email Prompts</CardTitle>
+                    <CardDescription>
+                      Manage your organization's email prompts
+                    </CardDescription>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="flex-1">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Email Prompts</CardTitle>
-                  <CardDescription>
-                    Manage your organization's email prompts
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Tabs 
-                    value={selectedType} 
-                    onValueChange={(value) => setSelectedType(value as EmailType)}
-                    defaultValue="response"
+                  <Select
+                    value={selectedTenant}
+                    onValueChange={setSelectedTenant}
                   >
-                    <TabsList className="mb-4">
-                      <TabsTrigger value="response" className="space-x-2">
-                        <MessageSquare className="w-4 h-4" />
-                        <span>Response Prompts</span>
-                      </TabsTrigger>
-                      <TabsTrigger value="rewrite" className="space-x-2">
-                        <RefreshCw className="w-4 h-4" />
-                        <span>Rewrite Prompts</span>
-                      </TabsTrigger>
-                    </TabsList>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="All Organizations" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_all">All Organizations</SelectItem>
+                      {tenants.map((tenant) => (
+                        <SelectItem key={tenant.id} value={tenant.id}>
+                          <div className="flex items-center space-x-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage src={tenant.avatar_url || undefined} />
+                              <AvatarFallback>
+                                {tenant.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>{tenant.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Tabs 
+                  value={selectedType} 
+                  onValueChange={(value) => setSelectedType(value as EmailType)}
+                  defaultValue="response"
+                >
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="response" className="space-x-2">
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Response Prompts</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="rewrite" className="space-x-2">
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Rewrite Prompts</span>
+                    </TabsTrigger>
+                  </TabsList>
 
-                    <TabsContent value="response" className="space-y-4">
-                      {filteredPrompts.map((prompt) => (
-                        <Card key={prompt.id}>
-                          <CardHeader>
-                            <div className="flex items-center justify-between">
-                              <div className="space-y-1">
-                                <CardTitle>{prompt.title}</CardTitle>
-                                {prompt.description && (
-                                  <CardDescription>
-                                    {prompt.description}
-                                  </CardDescription>
-                                )}
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => startEditingPrompt(prompt)}
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeletePrompt(prompt)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => togglePrompt(prompt.id)}
-                                >
-                                  <motion.div
-                                    animate={{ rotate: expandedPrompts[prompt.id] ? 180 : 0 }}
-                                    transition={{ duration: 0.2 }}
-                                  >
-                                    <ChevronDown className="h-4 w-4" />
-                                  </motion.div>
-                                </Button>
-                              </div>
+                  <TabsContent value="response" className="space-y-4">
+                    {filteredPrompts.map((prompt) => (
+                      <Card key={prompt.id}>
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <CardTitle>{prompt.title}</CardTitle>
+                              {prompt.description && (
+                                <CardDescription>
+                                  {prompt.description}
+                                </CardDescription>
+                              )}
                             </div>
-                            <div className="flex items-center space-x-2 text-sm text-muted-foreground mt-2">
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => startEditingPrompt(prompt)}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeletePrompt(prompt)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => togglePrompt(prompt.id)}
+                              >
+                                <motion.div
+                                  animate={{ rotate: expandedPrompts[prompt.id] ? 180 : 0 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <ChevronDown className="h-4 w-4" />
+                                </motion.div>
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2 text-sm text-muted-foreground mt-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage src={prompt.tenant.avatar_url || undefined} />
+                              <AvatarFallback>
+                                {prompt.tenant.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>{prompt.tenant.name}</span>
+                            <span>•</span>
+                            <span className="flex items-center space-x-1">
+                              <span>Created by</span>
                               <Avatar className="h-5 w-5">
-                                <AvatarImage src={prompt.tenant.avatar_url || undefined} />
+                                <AvatarImage src={prompt.creator.avatar_url || undefined} />
                                 <AvatarFallback>
-                                  {prompt.tenant.name.slice(0, 2).toUpperCase()}
+                                  {prompt.creator.name?.slice(0, 2).toUpperCase() || '??'}
                                 </AvatarFallback>
                               </Avatar>
-                              <span>{prompt.tenant.name}</span>
-                              <span>•</span>
-                              <span className="flex items-center space-x-1">
-                                <span>Created by</span>
-                                <Avatar className="h-5 w-5">
-                                  <AvatarImage src={prompt.creator.avatar_url || undefined} />
-                                  <AvatarFallback>
-                                    {prompt.creator.name?.slice(0, 2).toUpperCase() || '??'}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span>{prompt.creator.name}</span>
-                              </span>
-                              <span>•</span>
-                              <span>{new Date(prompt.created_at).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                              })}</span>
-                            </div>
-                          </CardHeader>
-                          <AnimatePresence initial={false}>
-                            {expandedPrompts[prompt.id] && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.2 }}
-                              >
-                                <CardContent className="space-y-4">
-                                  <div className="font-medium text-sm">Prompt</div>
-                                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                    {prompt.prompt}
-                                  </p>
-                                </CardContent>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </Card>
-                      ))}
-                    </TabsContent>
+                              <span>{prompt.creator.name}</span>
+                            </span>
+                            <span>•</span>
+                            <span>{new Date(prompt.created_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}</span>
+                          </div>
+                        </CardHeader>
+                        <AnimatePresence initial={false}>
+                          {expandedPrompts[prompt.id] && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                            >
+                              <CardContent className="space-y-4">
+                                <div className="font-medium text-sm">Prompt</div>
+                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                  {prompt.prompt}
+                                </p>
+                              </CardContent>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </Card>
+                    ))}
+                  </TabsContent>
 
-                    <TabsContent value="rewrite" className="space-y-4">
-                      {filteredPrompts.map((prompt) => (
-                        <Card key={prompt.id}>
-                          <CardHeader>
-                            <div className="flex items-center justify-between">
-                              <div className="space-y-1">
-                                <CardTitle>{prompt.title}</CardTitle>
-                                {prompt.description && (
-                                  <CardDescription>
-                                    {prompt.description}
-                                  </CardDescription>
-                                )}
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => startEditingPrompt(prompt)}
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeletePrompt(prompt)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => togglePrompt(prompt.id)}
-                                >
-                                  <motion.div
-                                    animate={{ rotate: expandedPrompts[prompt.id] ? 180 : 0 }}
-                                    transition={{ duration: 0.2 }}
-                                  >
-                                    <ChevronDown className="h-4 w-4" />
-                                  </motion.div>
-                                </Button>
-                              </div>
+                  <TabsContent value="rewrite" className="space-y-4">
+                    {filteredPrompts.map((prompt) => (
+                      <Card key={prompt.id}>
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <CardTitle>{prompt.title}</CardTitle>
+                              {prompt.description && (
+                                <CardDescription>
+                                  {prompt.description}
+                                </CardDescription>
+                              )}
                             </div>
-                            <div className="flex items-center space-x-2 text-sm text-muted-foreground mt-2">
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => startEditingPrompt(prompt)}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeletePrompt(prompt)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => togglePrompt(prompt.id)}
+                              >
+                                <motion.div
+                                  animate={{ rotate: expandedPrompts[prompt.id] ? 180 : 0 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <ChevronDown className="h-4 w-4" />
+                                </motion.div>
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2 text-sm text-muted-foreground mt-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage src={prompt.tenant.avatar_url || undefined} />
+                              <AvatarFallback>
+                                {prompt.tenant.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>{prompt.tenant.name}</span>
+                            <span>•</span>
+                            <span className="flex items-center space-x-1">
+                              <span>Created by</span>
                               <Avatar className="h-5 w-5">
-                                <AvatarImage src={prompt.tenant.avatar_url || undefined} />
+                                <AvatarImage src={prompt.creator.avatar_url || undefined} />
                                 <AvatarFallback>
-                                  {prompt.tenant.name.slice(0, 2).toUpperCase()}
+                                  {prompt.creator.name?.slice(0, 2).toUpperCase() || '??'}
                                 </AvatarFallback>
                               </Avatar>
-                              <span>{prompt.tenant.name}</span>
-                              <span>•</span>
-                              <span className="flex items-center space-x-1">
-                                <span>Created by</span>
-                                <Avatar className="h-5 w-5">
-                                  <AvatarImage src={prompt.creator.avatar_url || undefined} />
-                                  <AvatarFallback>
-                                    {prompt.creator.name?.slice(0, 2).toUpperCase() || '??'}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span>{prompt.creator.name}</span>
-                              </span>
-                              <span>•</span>
-                              <span>{new Date(prompt.created_at).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                              })}</span>
-                            </div>
-                          </CardHeader>
-                          <AnimatePresence initial={false}>
-                            {expandedPrompts[prompt.id] && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.2 }}
-                              >
-                                <CardContent className="space-y-4">
-                                  <div className="font-medium text-sm">Prompt</div>
-                                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                    {prompt.prompt}
-                                  </p>
-                                </CardContent>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </Card>
-                      ))}
-                    </TabsContent>
-                  </Tabs>
-                </CardContent>
-              </Card>
-            </div>
+                              <span>{prompt.creator.name}</span>
+                            </span>
+                            <span>•</span>
+                            <span>{new Date(prompt.created_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}</span>
+                          </div>
+                        </CardHeader>
+                        <AnimatePresence initial={false}>
+                          {expandedPrompts[prompt.id] && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                            >
+                              <CardContent className="space-y-4">
+                                <div className="font-medium text-sm">Prompt</div>
+                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                  {prompt.prompt}
+                                </p>
+                              </CardContent>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </Card>
+                    ))}
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>

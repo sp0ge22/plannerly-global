@@ -207,10 +207,11 @@ export default function EmailAssistantHelpPage() {
 
           <div className="grid grid-cols-1">
             <Tabs defaultValue="overview">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="workflow">Workflow</TabsTrigger>
                 <TabsTrigger value="examples">Examples</TabsTrigger>
+                <TabsTrigger value="tips">Tips</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-4">
@@ -1098,6 +1099,133 @@ Keep it professional and solution-focused, without over-explaining.`
                             Regularly update prompts based on feedback and effectiveness
                           </li>
                         </ul>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="tips" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Tips for Creating Effective Prompts</CardTitle>
+                    <CardDescription>
+                      Still struggling with creating prompts? Let's break it down into simple steps.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="bg-muted/50 p-6 rounded-lg space-y-4">
+                      <div className="text-center max-w-2xl mx-auto">
+                        <h3 className="text-xl font-semibold">Think of Prompts as Instructions to an Employee</h3>
+                        <p className="text-muted-foreground mt-2">
+                          Imagine you're training a new team member. You're simply telling them how to handle different types of emails.
+                        </p>
+                      </div>
+
+                      <div className="space-y-6 mt-8">
+                        <div className="bg-background p-4 rounded-lg border shadow-sm">
+                          <h4 className="font-medium flex items-center gap-2">
+                            <MessageSquare className="w-5 h-5 text-primary" />
+                            Example: Warranty Request Instructions
+                          </h4>
+                          <div className="mt-3 text-muted-foreground">
+                            <p className="italic">
+                              "Hey Sally, when handling incoming emails about warranties, remember to:
+                              - Always start with a courteous greeting and show empathy
+                              - Ask for clear photos of the issue
+                              - Request their purchase receipt
+                              - Explain our warranty guidelines
+                              - Provide estimated processing times
+                              - End with a reassuring message"
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-6 mt-6">
+                          <div className="space-y-4">
+                            <h3 className="text-lg font-semibold">Key Principles for Effective Prompts</h3>
+                            
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <h4 className="font-medium flex items-center gap-2">
+                                  <Sparkles className="w-4 h-4 text-primary" />
+                                  Be Specific
+                                </h4>
+                                <p className="text-muted-foreground">
+                                  The more specific your instructions, the better the output. Include exact requirements, preferred language, and any necessary steps.
+                                </p>
+                              </div>
+
+                              <div className="space-y-2">
+                                <h4 className="font-medium flex items-center gap-2">
+                                  <Sparkles className="w-4 h-4 text-primary" />
+                                  Include Context
+                                </h4>
+                                <p className="text-muted-foreground">
+                                  Help the AI understand the situation by providing context about your business, customer expectations, and common scenarios.
+                                </p>
+                              </div>
+
+                              <div className="space-y-2">
+                                <h4 className="font-medium flex items-center gap-2">
+                                  <Sparkles className="w-4 h-4 text-primary" />
+                                  Define the Tone
+                                </h4>
+                                <p className="text-muted-foreground">
+                                  Clearly specify the desired tone - professional, friendly, formal, or casual. This ensures consistency in communication.
+                                </p>
+                              </div>
+
+                              <div className="space-y-2">
+                                <h4 className="font-medium flex items-center gap-2">
+                                  <Sparkles className="w-4 h-4 text-primary" />
+                                  Structure the Response
+                                </h4>
+                                <p className="text-muted-foreground">
+                                  Outline how the response should be structured - greeting, main content, closing, signature, etc.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <h3 className="text-lg font-semibold">Using AI to Create Prompts</h3>
+                            <div className="bg-muted p-4 rounded-lg space-y-4">
+                              <p className="text-muted-foreground">
+                                Don't want to write prompts yourself? Let AI help! Simply:
+                              </p>
+                              <ol className="space-y-2 ml-4 text-muted-foreground">
+                                <li>1. Click "Add Prompt with AI"</li>
+                                <li>2. Describe your email scenario in plain language</li>
+                                <li>3. Specify any special requirements or preferences</li>
+                                <li>4. Let AI create a detailed prompt for you</li>
+                                <li>5. Review and adjust as needed</li>
+                              </ol>
+                            </div>
+                          </div>
+
+                          <div className="bg-muted p-4 rounded-lg">
+                            <h4 className="font-medium mb-2">Remember</h4>
+                            <ul className="space-y-2 text-sm text-muted-foreground">
+                              <li className="flex items-start gap-2">
+                                <Sparkles className="w-4 h-4 mt-1 text-primary" />
+                                Start simple and add detail as needed
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <Sparkles className="w-4 h-4 mt-1 text-primary" />
+                                Test your prompts with different scenarios
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <Sparkles className="w-4 h-4 mt-1 text-primary" />
+                                Refine based on actual results
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <Sparkles className="w-4 h-4 mt-1 text-primary" />
+                                Share effective prompts with your team
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
