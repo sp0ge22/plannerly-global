@@ -45,18 +45,48 @@ export async function DELETE(
     // Get PIN from request body
     const { pin } = await request.json()
 
-    // Verify PIN (you might want to implement your own PIN verification logic)
+    // Verify PIN
     if (!pin) {
       return NextResponse.json({ error: 'PIN required' }, { status: 400 })
     }
 
-    // Delete the resource
+    // Verify the PIN matches the organization's PIN
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .select('pin')
+      .eq('id', resource.tenant_id)
+      .single()
+
+    if (tenantError || !tenant) {
+      console.error('Tenant lookup error:', tenantError)
+      return NextResponse.json({ error: 'Could not verify organization' }, { status: 403 })
+    }
+
+    if (tenant.pin !== pin) {
+      return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
+    }
+
+    // First, delete any references in tenant_resource_templates
+    const { error: templateDeleteError } = await supabase
+      .from('tenant_resource_templates')
+      .delete()
+      .match({ resource_id: params.id })
+
+    if (templateDeleteError) {
+      console.error('Error deleting template reference:', templateDeleteError)
+      return NextResponse.json({ error: 'Failed to delete resource reference' }, { status: 500 })
+    }
+
+    // Then delete the resource
     const { error: deleteError } = await supabase
       .from('resources')
       .delete()
       .eq('id', params.id)
 
-    if (deleteError) throw deleteError
+    if (deleteError) {
+      console.error('Error deleting resource:', deleteError)
+      return NextResponse.json({ error: 'Failed to delete resource' }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

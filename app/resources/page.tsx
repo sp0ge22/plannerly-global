@@ -6,10 +6,10 @@ import { Card, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Plus, Folder, Link2, Search, Trash2, Pencil } from 'lucide-react'
+import { Loader2, Plus, Folder, Link2, Search, Trash2, Pencil, Library } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 
@@ -18,11 +18,16 @@ interface Resource {
   title: string
   url: string
   description: string | null
-  category_id: number
-  icon: string | null
-  image_url: string | null
-  created_at: string
+  category_id: number | null
   tenant_id: string
+  created_at: string
+  created_by: string
+  image_url: string | null
+  tenant?: {
+    id: string
+    name: string
+    avatar_url: string | null
+  }
 }
 
 interface Category {
@@ -54,12 +59,12 @@ export default function ResourcesPage() {
   const { toast } = useToast()
 
   // Form states
-  const [newResource, setNewResource] = useState({
+  const [newResource, setNewResource] = useState<Partial<Resource>>({
     title: '',
     url: '',
     description: '',
-    category_id: '',
-    image_url: '',
+    category_id: null,
+    image_url: null,
     tenant_id: ''
   })
 
@@ -227,7 +232,7 @@ export default function ResourcesPage() {
       const addedResource = await response.json()
       setResources(prev => [...prev, addedResource])
       setIsAddDialogOpen(false)
-      setNewResource({ title: '', url: '', description: '', category_id: '', image_url: '', tenant_id: '' })
+      setNewResource({ title: '', url: '', description: '', category_id: null, image_url: null, tenant_id: '' })
       
       toast({
         title: "Resource added",
@@ -278,7 +283,7 @@ export default function ResourcesPage() {
     const matchesSearch = 
       resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       resource.description?.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || resource.category_id === parseInt(selectedCategory)
+    const matchesCategory = selectedCategory === 'all' || (resource.category_id !== null && resource.category_id.toString() === selectedCategory)
     const matchesTenant = selectedTenant === 'all' || resource.tenant_id === selectedTenant
     return matchesSearch && matchesCategory && matchesTenant
   })
@@ -335,10 +340,16 @@ export default function ResourcesPage() {
                   Manage and access your important links and resources
                 </p>
               </div>
-              <Button onClick={() => setIsAddDialogOpen(true)} size="sm" className="h-9">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Resource
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => window.location.href = '/resource-library'} size="sm" className="h-9">
+                  <Library className="w-4 h-4 mr-2" />
+                  Resource Library
+                </Button>
+                <Button onClick={() => setIsAddDialogOpen(true)} size="sm" className="h-9">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Resource
+                </Button>
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full">
@@ -610,7 +621,7 @@ export default function ResourcesPage() {
               <Label htmlFor="description">Description (optional)</Label>
               <Input
                 id="description"
-                value={newResource.description}
+                value={newResource.description ?? ''}
                 onChange={(e) => setNewResource(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="Enter resource description"
               />
@@ -619,8 +630,8 @@ export default function ResourcesPage() {
               <Label htmlFor="image_url">Image URL (optional)</Label>
               <Input
                 id="image_url"
-                value={newResource.image_url || ''}
-                onChange={(e) => setNewResource(prev => ({ ...prev, image_url: e.target.value }))}
+                value={newResource.image_url ?? ''}
+                onChange={(e) => setNewResource(prev => ({ ...prev, image_url: e.target.value || null }))}
                 placeholder="Enter image URL"
               />
             </div>
@@ -629,8 +640,11 @@ export default function ResourcesPage() {
               {!isAddingCategory ? (
                 <div className="flex items-center space-x-2">
                   <Select
-                    value={newResource.category_id}
-                    onValueChange={(value) => setNewResource(prev => ({ ...prev, category_id: value }))}
+                    value={newResource.category_id?.toString() ?? ''}
+                    onValueChange={(value) => setNewResource(prev => ({ 
+                      ...prev, 
+                      category_id: value ? parseInt(value) : null 
+                    }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a category" />
@@ -689,8 +703,8 @@ export default function ResourcesPage() {
                 title: '',
                 url: '',
                 description: '',
-                category_id: '',
-                image_url: '',
+                category_id: null,
+                image_url: null,
                 tenant_id: ''
               })
             }}>
@@ -707,44 +721,64 @@ export default function ResourcesPage() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
+      <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsDeleteDialogOpen(false);
+          setSelectedResource(null);
+          setPin('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-destructive flex items-center gap-2">
-              <Trash2 className="w-5 h-5" />
-              Delete Resource
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-6">
-            <div className="mb-6 space-y-2">
-              <p className="font-medium">Are you sure you want to delete this resource?</p>
-              <p className="text-sm text-muted-foreground">
-                &ldquo;{selectedResource?.title}&rdquo;
-              </p>
-              <p className="text-sm text-muted-foreground">
-                This action cannot be undone.
-              </p>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={selectedResource?.tenant?.avatar_url ?? undefined} />
+                <AvatarFallback>
+                  {selectedResource?.tenant?.name?.slice(0, 2).toUpperCase() ?? 'UN'}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <DialogTitle className="text-xl">Confirm Deletion</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Enter {selectedResource?.tenant?.name}'s PIN to delete this resource
+                </DialogDescription>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="pin">Enter your PIN to confirm:</Label>
-              <Input
-                id="pin"
-                type="password"
-                placeholder="Enter PIN"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                className="max-w-[200px]"
-                autoComplete="off"
-              />
+          </DialogHeader>
+          <div className="mt-6">
+            <div className="space-y-4">
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-medium text-sm">Resource to Delete:</h4>
+                <p className="text-sm text-muted-foreground">{selectedResource?.title}</p>
+              </div>
+              <div className="space-y-3">
+                <Label htmlFor="pin" className="text-sm font-medium">
+                  Organization PIN
+                </Label>
+                <Input
+                  id="pin"
+                  type="password"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="Enter 4-digit PIN"
+                  maxLength={4}
+                  pattern="[0-9]*"
+                  inputMode="numeric"
+                  className="text-lg tracking-widest"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Contact your organization owner if you don't know the PIN
+                </p>
+              </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-6 gap-2 sm:gap-0">
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() => {
-                setIsDeleteDialogOpen(false)
-                setPin('')
-                setSelectedResource(null)
+                setIsDeleteDialogOpen(false);
+                setSelectedResource(null);
+                setPin('');
               }}
             >
               Cancel
@@ -752,7 +786,7 @@ export default function ResourcesPage() {
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={!pin}
+              disabled={!pin.trim() || pin.length !== 4}
               className="gap-2"
             >
               <Trash2 className="w-4 h-4" />
@@ -795,9 +829,9 @@ export default function ResourcesPage() {
               <Label htmlFor="edit-description">Description (optional)</Label>
               <Input
                 id="edit-description"
-                value={editingResource?.description || ''}
+                value={editingResource?.description ?? ''}
                 onChange={(e) => setEditingResource(prev => 
-                  prev ? { ...prev, description: e.target.value } : null
+                  prev ? { ...prev, description: e.target.value || null } : null
                 )}
                 placeholder="Enter resource description"
               />
@@ -806,9 +840,9 @@ export default function ResourcesPage() {
               <Label htmlFor="edit-image-url">Image URL (optional)</Label>
               <Input
                 id="edit-image-url"
-                value={editingResource?.image_url || ''}
+                value={editingResource?.image_url ?? ''}
                 onChange={(e) => setEditingResource(prev => 
-                  prev ? { ...prev, image_url: e.target.value } : null
+                  prev ? { ...prev, image_url: e.target.value || null } : null
                 )}
                 placeholder="Enter image URL"
               />
@@ -818,9 +852,9 @@ export default function ResourcesPage() {
               {!isAddingCategory ? (
                 <div className="flex items-center space-x-2">
                   <Select
-                    value={editingResource?.category_id.toString()}
+                    value={editingResource?.category_id?.toString() ?? ''}
                     onValueChange={(value) => setEditingResource(prev => 
-                      prev ? { ...prev, category_id: parseInt(value) } : null
+                      prev ? { ...prev, category_id: value ? parseInt(value) : null } : null
                     )}
                   >
                     <SelectTrigger>

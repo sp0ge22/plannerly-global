@@ -98,24 +98,27 @@ export async function GET() {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Get tenant_id
-    const { data: userTenant, error: userTenantError } = await supabase
+    // Get all tenant IDs the user is a member of
+    const { data: userTenants, error: userTenantsError } = await supabase
       .from('user_tenants')
       .select('tenant_id')
       .eq('user_id', session.user.id)
-      .single()
 
-    if (userTenantError || !userTenant) {
-      console.error('User tenant lookup error:', userTenantError)
-      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+    if (userTenantsError) {
+      console.error('User tenants lookup error:', userTenantsError)
+      return NextResponse.json({ error: 'Could not determine tenants' }, { status: 403 })
     }
 
-    const tenantId = userTenant.tenant_id
+    if (!userTenants || userTenants.length === 0) {
+      return NextResponse.json({ error: 'User is not a member of any organization' }, { status: 403 })
+    }
+
+    const tenantIds = userTenants.map(ut => ut.tenant_id)
 
     const { data, error } = await supabase
       .from('resource_categories')
       .select('*')
-      .eq('tenant_id', tenantId)
+      .in('tenant_id', tenantIds)
       .order('name', { ascending: true })
 
     if (error) throw error
