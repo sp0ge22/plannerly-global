@@ -60,7 +60,7 @@ export async function GET(request: Request) {
 
     // Get categories
     const { data: categories, error: categoriesError } = await supabase
-      .from('categories')
+      .from('resource_categories')
       .select('*')
       .in('tenant_id', userTenantsData.map(ut => ut.tenant_id))
 
