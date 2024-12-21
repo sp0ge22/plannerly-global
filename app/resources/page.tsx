@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Plus, Folder, Link2, Search, Trash2, Pencil, Library } from 'lucide-react'
+import { Loader2, Plus, Folder, Link2, Search, Trash2, Pencil, Library, Sparkles, RefreshCw } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 
@@ -44,10 +44,17 @@ interface Tenant {
   avatar_url: string | null
 }
 
+interface UserTenant {
+  tenant_id: string
+  is_owner: boolean
+  is_admin: boolean
+}
+
 export default function ResourcesPage() {
   const [resources, setResources] = useState<Resource[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [tenants, setTenants] = useState<Tenant[]>([])
+  const [userTenants, setUserTenants] = useState<UserTenant[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
@@ -327,6 +334,93 @@ export default function ResourcesPage() {
     }
   };
 
+  const [isAIDialogOpen, setIsAIDialogOpen] = useState(false)
+  const [aiResourceSuggestion, setAiResourceSuggestion] = useState<{
+    title: string
+    description: string
+    url: string
+    image_url: string | null
+    suggestedCategory?: string
+    category_id?: number | null
+  } | null>(null)
+  const [isLoadingAI, setIsLoadingAI] = useState(false)
+  const [resourceUrl, setResourceUrl] = useState('')
+
+  const handleAddWithAI = async () => {
+    if (!resourceUrl) return
+
+    setIsLoadingAI(true)
+    try {
+      const response = await fetch('/api/resources/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyName: resourceUrl }),
+      })
+
+      if (!response.ok) throw new Error('Failed to get AI suggestion')
+
+      const suggestion = await response.json()
+      setAiResourceSuggestion(suggestion)
+    } catch (error) {
+      console.error('Error getting AI suggestion:', error)
+      toast({
+        title: "Failed to get AI suggestion",
+        description: "There was an error analyzing the resource. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingAI(false)
+    }
+  }
+
+  const handleRefreshLogo = async () => {
+    if (!resourceUrl) return
+
+    setIsLoadingAI(true)
+    try {
+      const response = await fetch('/api/resources/find-logo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: resourceUrl }),
+      })
+
+      if (!response.ok) throw new Error('Failed to find logo')
+
+      const { image_url } = await response.json()
+      if (aiResourceSuggestion) {
+        setAiResourceSuggestion({
+          ...aiResourceSuggestion,
+          image_url
+        })
+      }
+    } catch (error) {
+      console.error('Error finding logo:', error)
+      toast({
+        title: "Failed to find logo",
+        description: "There was an error finding a new logo. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingAI(false)
+    }
+  }
+
+  const handleAddAISuggestion = () => {
+    if (!aiResourceSuggestion) return
+
+    // Create new resource with AI suggestion data
+    const newResourceData = {
+      ...newResource,
+      ...aiResourceSuggestion,
+      tenant_id: selectedTenant !== 'all' ? selectedTenant : tenants[0]?.id || '',
+      category_id: aiResourceSuggestion.category_id || null // Use the category_id from AI suggestion
+    }
+
+    setNewResource(newResourceData)
+    setIsAIDialogOpen(false)
+    setIsAddDialogOpen(true)
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-b from-neutral-50 to-neutral-100">
       <main className="flex-1 p-6">
@@ -344,6 +438,10 @@ export default function ResourcesPage() {
                 <Button variant="outline" onClick={() => window.location.href = '/resource-library'} size="sm" className="h-9">
                   <Library className="w-4 h-4 mr-2" />
                   Resource Library
+                </Button>
+                <Button variant="outline" onClick={() => setIsAIDialogOpen(true)} size="sm" className="h-9">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Add with AI
                 </Button>
                 <Button onClick={() => setIsAddDialogOpen(true)} size="sm" className="h-9">
                   <Plus className="w-4 h-4 mr-2" />
@@ -553,7 +651,38 @@ export default function ResourcesPage() {
       </main>
 
       {/* Add Resource Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+      <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsAddDialogOpen(false)
+          setNewResource({
+            title: '',
+            url: '',
+            description: '',
+            category_id: null,
+            image_url: null,
+            tenant_id: ''
+          })
+        } else {
+          // Set default organization based on priority
+          const defaultTenant = tenants
+            .filter(tenant => userTenants.some(ut => ut.tenant_id === tenant.id))
+            .sort((a, b) => {
+              const aUserTenant = userTenants.find(ut => ut.tenant_id === a.id)
+              const bUserTenant = userTenants.find(ut => ut.tenant_id === b.id)
+              
+              // Sort by role priority: owner > admin > member
+              if (aUserTenant?.is_owner) return -1
+              if (bUserTenant?.is_owner) return 1
+              if (aUserTenant?.is_admin) return -1
+              if (bUserTenant?.is_admin) return 1
+              return 0
+            })[0]
+
+          if (defaultTenant) {
+            setNewResource(prev => ({ ...prev, tenant_id: defaultTenant.id }))
+          }
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Resource</DialogTitle>
@@ -960,6 +1089,162 @@ export default function ResourcesPage() {
               Cancel
             </Button>
             <Button onClick={handleEditCategory}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Dialog */}
+      <Dialog open={isAIDialogOpen} onOpenChange={setIsAIDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Add Resource with AI</DialogTitle>
+            <DialogDescription>
+              Enter a company or tool name and let AI help you create a resource
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter company name (e.g., FedEx, Slack)"
+                value={resourceUrl}
+                onChange={(e) => setResourceUrl(e.target.value)}
+              />
+              <Button onClick={handleAddWithAI} disabled={isLoadingAI || !resourceUrl}>
+                {isLoadingAI ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                Analyze
+              </Button>
+            </div>
+
+            {aiResourceSuggestion && (
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  {aiResourceSuggestion.image_url ? (
+                    <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-neutral-100">
+                      <img
+                        src={aiResourceSuggestion.image_url}
+                        alt="Resource logo"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg flex-shrink-0 bg-neutral-100 flex items-center justify-center">
+                      <Link2 className="w-6 h-6 text-neutral-400" />
+                    </div>
+                  )}
+                  <div className="flex-grow space-y-2">
+                    <h3 className="font-medium">{aiResourceSuggestion.title}</h3>
+                    <p className="text-sm text-muted-foreground">{aiResourceSuggestion.description}</p>
+                    <div className="text-xs text-muted-foreground">
+                      {aiResourceSuggestion.url}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  {!isAddingCategory ? (
+                    <div className="flex items-center space-x-2">
+                      <Select
+                        value={newResource.category_id?.toString() ?? ''}
+                        onValueChange={(value) => setNewResource(prev => ({ 
+                          ...prev, 
+                          category_id: value ? parseInt(value) : null 
+                        }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories
+                            .filter(category => category.tenant_id === (selectedTenant !== 'all' ? selectedTenant : tenants[0]?.id))
+                            .map(category => (
+                              <SelectItem key={category.id} value={category.id.toString()}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setIsAddingCategory(true)
+                          if (aiResourceSuggestion.suggestedCategory) {
+                            setNewCategory(aiResourceSuggestion.suggestedCategory)
+                          }
+                        }}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        value={newCategory}
+                        onChange={(e) => setNewCategory(e.target.value)}
+                        placeholder="New category name"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleAddCategory}
+                        disabled={!newCategory}
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                          setIsAddingCategory(false)
+                          setNewCategory('')
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                  {aiResourceSuggestion.suggestedCategory && !isAddingCategory && !newResource.category_id && (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      AI suggests creating a new category: "{aiResourceSuggestion.suggestedCategory}"
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  onClick={handleRefreshLogo}
+                  disabled={isLoadingAI}
+                  className="w-full gap-2"
+                >
+                  {isLoadingAI ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  Try Different Logo
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAIDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddAISuggestion}
+              disabled={!aiResourceSuggestion || !newResource.category_id}
+              className="gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Resource
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

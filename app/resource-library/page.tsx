@@ -22,7 +22,7 @@ type ResourceTemplate = {
   image_url: string | null
   created_at: string
   is_public: boolean
-  metadata: any
+  metadata: Record<string, unknown>
 }
 
 type ResourceTemplateCategory = {
@@ -56,8 +56,16 @@ interface CustomizedResource {
   category_id?: number | null
 }
 
+interface UserTenant {
+  tenant_id: string
+  is_owner: boolean
+  is_admin: boolean
+  user_id: string
+  created_at: string
+}
+
 // Add helper function to get default organization
-function getDefaultOrganization(tenants: Tenant[], userTenants: any[]): string | null {
+function getDefaultOrganization(tenants: Tenant[], userTenants: UserTenant[]): string | null {
   // First try to find an org where user is owner
   const ownerOrg = userTenants.find(ut => ut.is_owner)?.tenant_id;
   if (ownerOrg) return ownerOrg;
@@ -90,7 +98,7 @@ export default function ResourceLibraryPage() {
   const [isAddingCategory, setIsAddingCategory] = useState(false)
   const [newCategory, setNewCategory] = useState('')
   const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<ResourceTemplateCategory | null>(null)
-  const [userTenants, setUserTenants] = useState<any[]>([]);
+  const [userTenants, setUserTenants] = useState<UserTenant[]>([]);
 
   const { toast } = useToast()
   const supabase = createClientComponentClient()
