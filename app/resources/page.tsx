@@ -47,7 +47,8 @@ interface Tenant {
 interface UserTenant {
   tenant_id: string
   is_owner: boolean
-  is_admin: boolean
+  is_admin: boolean | null
+  id?: string
 }
 
 export default function ResourcesPage() {
@@ -173,13 +174,38 @@ export default function ResourcesPage() {
     if (!editingResource) return
 
     try {
+      // Debug logs
+      console.log('Editing resource for tenant:', editingResource.tenant_id)
+      console.log('Available user tenants:', userTenants)
+      
+      // Find the user tenant that matches the resource's tenant and check permissions
+      const userTenant = userTenants.find(ut => {
+        const isAdmin = ut.is_admin === true || ut.is_admin === null // treat null as true for backward compatibility
+        console.log('Checking tenant:', ut.tenant_id, 'isAdmin:', isAdmin, 'isOwner:', ut.is_owner)
+        return ut.tenant_id === editingResource.tenant_id && (ut.is_owner || isAdmin)
+      })
+      
+      console.log('Found user tenant:', userTenant)
+      
+      if (!userTenant) {
+        throw new Error('You must be an admin or owner to edit resources')
+      }
+
+      const resourceToUpdate = {
+        ...editingResource,
+        tenant_id: editingResource.tenant_id
+      }
+
       const response = await fetch(`/api/resources/${editingResource.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingResource),
+        body: JSON.stringify(resourceToUpdate),
       })
 
-      if (!response.ok) throw new Error('Failed to update resource')
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to update resource')
+      }
 
       const updatedResource = await response.json()
       setResources(prev => prev.map(r => 
@@ -196,7 +222,7 @@ export default function ResourcesPage() {
       console.error('Error updating resource:', error)
       toast({
         title: "Failed to update resource",
-        description: "There was an error updating the resource. Please try again.",
+        description: error instanceof Error ? error.message : "There was an error updating the resource. Please try again.",
         variant: "destructive",
       })
     }
@@ -206,10 +232,26 @@ export default function ResourcesPage() {
     try {
       const response = await fetch('/api/resources')
       const data = await response.json()
+      console.log('Full API response:', data)
       console.log('Fetched tenants:', data.tenants)
+      console.log('Fetched user tenants:', data.userTenants)
+      
+      if (!data.userTenants) {
+        console.error('No userTenants data received from API')
+        toast({
+          title: "Warning",
+          description: "Could not load user permissions. Some features may be limited.",
+          variant: "destructive",
+        })
+      }
+      
       setResources(data.resources)
       setCategories(data.categories)
       setTenants(data.tenants)
+      setUserTenants(data.userTenants || [])
+
+      // Debug log after setting state
+      console.log('UserTenants state after update:', data.userTenants || [])
     } catch (error) {
       console.error('Error fetching resources:', error)
       toast({
@@ -305,7 +347,10 @@ export default function ResourcesPage() {
       const response = await fetch(`/api/resources/categories/${editingCategory.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingCategory),
+        body: JSON.stringify({
+          ...editingCategory,
+          tenant_id: editingCategory.tenant_id
+        }),
       });
 
       if (!response.ok) throw new Error('Failed to update category');

@@ -14,28 +14,35 @@ export async function PUT(
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Get tenant_id
-    const { data: userTenant, error: userTenantError } = await supabase
+    const body = await request.json()
+    const { name, image_url, tenant_id } = body
+
+    if (!tenant_id) {
+      return NextResponse.json({ error: 'Tenant ID is required' }, { status: 400 })
+    }
+
+    // Verify user has access to this tenant
+    const { data: userTenants, error: userTenantError } = await supabase
       .from('user_tenants')
       .select('tenant_id')
       .eq('user_id', session.user.id)
-      .single()
+      .eq('tenant_id', tenant_id)
 
-    if (userTenantError || !userTenant) {
+    if (userTenantError) {
       console.error('User tenant lookup error:', userTenantError)
-      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+      return NextResponse.json({ error: 'Error verifying tenant access' }, { status: 500 })
     }
 
-    const tenantId = userTenant.tenant_id
-    const body = await request.json()
-    const { name, image_url } = body
+    if (!userTenants || userTenants.length === 0) {
+      return NextResponse.json({ error: 'Not authorized for this organization' }, { status: 403 })
+    }
 
     // Update category only if it belongs to this tenant
     const { data: updatedCategory, error: categoryError } = await supabase
       .from('resource_categories')
       .update({ name, image_url })
       .eq('id', params.id)
-      .eq('tenant_id', tenantId)
+      .eq('tenant_id', tenant_id)
       .select()
       .single()
 

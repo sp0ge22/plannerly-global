@@ -107,37 +107,60 @@ export async function PUT(
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Get tenant_id
-    const { data: userTenant, error: userTenantError } = await supabase
-      .from('user_tenants')
-      .select('tenant_id')
-      .eq('user_id', session.user.id)
-      .single()
+    const body = await request.json()
+    const { tenant_id, tenant, created_at, created_by, id, ...updateData } = body
 
-    if (userTenantError || !userTenant) {
-      console.error('User tenant lookup error:', userTenantError)
-      return NextResponse.json({ error: 'Could not determine tenant' }, { status: 403 })
+    if (!tenant_id) {
+      return NextResponse.json({ error: 'Tenant ID is required' }, { status: 400 })
     }
 
-    const tenantId = userTenant.tenant_id
+    // Verify user has admin/owner access to this tenant
+    const { data: userTenants, error: userTenantError } = await supabase
+      .from('user_tenants')
+      .select('*')  // Select all fields to check permissions
+      .eq('user_id', session.user.id)
+      .eq('tenant_id', tenant_id)
 
-    const body = await request.json()
-    const { title, url, description, category_id, image_url } = body
+    if (userTenantError) {
+      console.error('User tenant lookup error:', userTenantError)
+      return NextResponse.json({ error: 'Error verifying tenant access' }, { status: 500 })
+    }
 
-    // Update resource only if it belongs to this tenant
-    const { data, error } = await supabase
+    if (!userTenants || userTenants.length === 0) {
+      return NextResponse.json({ error: 'Not authorized for this organization' }, { status: 403 })
+    }
+
+    // Check if user is admin or owner
+    const hasPermission = userTenants.some(ut => ut.is_owner || ut.is_admin === true || ut.is_admin === null)
+    if (!hasPermission) {
+      return NextResponse.json({ error: 'You must be an admin or owner to edit resources' }, { status: 403 })
+    }
+
+    // Update resource with cleaned data
+    const { data: updatedResource, error: updateError } = await supabase
       .from('resources')
-      .update({ title, url, description, category_id, image_url })
+      .update({
+        title: updateData.title,
+        url: updateData.url,
+        description: updateData.description,
+        category_id: updateData.category_id,
+        image_url: updateData.image_url
+      })
       .eq('id', params.id)
-      .eq('tenant_id', tenantId)
-      .select()
+      .eq('tenant_id', tenant_id)
+      .select('*')
       .single()
 
-    if (error) throw error
+    if (updateError) {
+      console.error('Update error:', updateError)
+      throw updateError
+    }
 
-    return NextResponse.json(data)
+    return NextResponse.json(updatedResource)
   } catch (error) {
     console.error('Error:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Internal Server Error' 
+    }, { status: 500 })
   }
 }
