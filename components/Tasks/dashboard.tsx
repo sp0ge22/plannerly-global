@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Loader2, Filter, RefreshCcw, Calendar, Archive, ArchiveRestore, Crown, Shield, User } from 'lucide-react'
+import { Plus, Search, Loader2, Filter, RefreshCcw, Calendar, Archive, ArchiveRestore, Crown, Shield, User, Edit2, Sparkles } from 'lucide-react'
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { sortTasks } from './TaskGrid' // Ensure this import is correct
@@ -378,8 +378,14 @@ export function DashboardComponent() {
             </Button>
             <AddTaskDialog addTask={addTask}>
               <Button size="sm">
-                <Plus className="w-4 h-4 mr-1" />
-                Add Task
+                <Edit2 className="w-4 h-4 mr-1" />
+                Add Task Manually
+              </Button>
+            </AddTaskDialog>
+            <AddTaskDialog addTask={addTask} openAIDirectly={true}>
+              <Button size="sm" variant="secondary">
+                <Sparkles className="w-4 h-4 mr-1" />
+                Add Task with AI
               </Button>
             </AddTaskDialog>
           </div>

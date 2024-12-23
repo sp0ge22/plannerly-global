@@ -18,6 +18,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Crown, Shield, User } from "lucide-react"
 import { Sparkles } from "lucide-react"
+import { useRouter } from 'next/navigation'
 
 type Tenant = {
   id: string
@@ -50,9 +51,11 @@ type OrgUser = {
 type AddTaskDialogProps = {
   addTask: (task: Omit<Task, 'id' | 'comments' | 'created_at'>) => Promise<boolean>
   children: ReactNode
+  openAIDirectly?: boolean
 }
 
-export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
+export function AddTaskDialog({ addTask, children, openAIDirectly = false }: AddTaskDialogProps) {
+  const router = useRouter()
   const [newTask, setNewTask] = useState<Omit<Task, 'id' | 'comments' | 'created_at'>>({
     title: '',
     body: '',
@@ -79,7 +82,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
   const [showSuggestionDialog, setShowSuggestionDialog] = useState(false)
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen || isAddingTaskWithAI) {
       const fetchTenants = async () => {
         const { data: userTenants, error } = await supabase
           .from('user_tenants')
@@ -132,7 +135,7 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
 
       fetchTenants()
     }
-  }, [isOpen, supabase])
+  }, [isOpen, isAddingTaskWithAI, supabase])
 
   useEffect(() => {
     const fetchOrgUsers = async () => {
@@ -279,6 +282,10 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
           archived: false,
           tenant_id: tenants[0]?.id || ''
         })
+        
+        // Ensure router refresh happens after state updates
+        await router.refresh()
+        
         toast({
           title: "Task added successfully",
           description: "Your new task has been added to the list.",
@@ -321,6 +328,15 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
       return
     }
 
+    if (!newTask.tenant_id) {
+      toast({
+        title: "Organization required",
+        description: "Please select an organization for the task.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsGeneratingTask(true)
     try {
       const response = await fetch('/api/generate-task', {
@@ -329,7 +345,14 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
         body: JSON.stringify({
           description: taskDescription,
           tenant_id: newTask.tenant_id,
-          orgUsers: orgUsers
+          orgUsers: orgUsers.map(user => ({
+            ...user,
+            profile: {
+              ...user.profile,
+              // Ensure we're sending the avatar URL
+              avatar_url: user.profile.avatar_url || null
+            }
+          }))
         }),
       })
 
@@ -337,21 +360,32 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
 
       const data = await response.json()
       
+      // Find the assignee's full profile data
+      const assigneeData = data.assignee !== 'incomplete' 
+        ? orgUsers.find(user => 
+            user.profile.name === data.assignee || 
+            user.profile.email === data.assignee ||
+            user.user_id === data.assignee
+          )
+        : null;
+
       // Update the task form with the generated data
-      setNewTask({
+      const generatedTask = {
         ...newTask,
         title: data.title === 'incomplete' ? '' : data.title,
         body: data.body === 'incomplete' ? '' : data.body,
-        assignee: data.assignee === 'incomplete' ? '' : data.assignee,
+        assignee: data.assignee === 'incomplete' ? '' : (assigneeData?.profile.name || assigneeData?.profile.email || data.assignee),
         priority: data.priority === 'incomplete' ? 'Medium' : data.priority,
         status: data.status === 'incomplete' ? 'To Do' : data.status,
         due: data.due === 'incomplete' ? null : data.due
-      })
-
+      }
+      
+      setNewTask(generatedTask)
       setMissingFields(data.missing_fields || [])
       setIsAddingTaskWithAI(false)
-      setIsAddingPrompt(true)
       setTaskDescription('')
+      // Open the main task dialog with pre-filled data
+      setIsOpen(true)
 
       if (data.missing_fields?.length > 0) {
         toast({
@@ -388,8 +422,17 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild onClick={() => setShowSuggestionDialog(true)}>
-        {children}
+      <DialogTrigger asChild>
+        <div onClick={(e) => {
+          e.preventDefault();
+          if (openAIDirectly) {
+            setIsAddingTaskWithAI(true);
+          } else {
+            setShowSuggestionDialog(true);
+          }
+        }}>
+          {children}
+        </div>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[800px] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
@@ -753,53 +796,6 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
         </DialogFooter>
       </DialogContent>
 
-      <Dialog open={isAddingTaskWithAI} onOpenChange={setIsAddingTaskWithAI}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Create Task with AI</DialogTitle>
-            <DialogDescription>
-              Describe the task you want to create, and AI will help you generate it.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="task-description">What task do you want to create?</Label>
-              <Textarea
-                id="task-description"
-                value={taskDescription}
-                onChange={(e) => setTaskDescription(e.target.value)}
-                placeholder="Example: Create a high-priority task for John to review the Q4 budget report by next Friday..."
-                className="min-h-[100px]"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsAddingTaskWithAI(false)
-              setTaskDescription('')
-            }}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={generateTaskWithAI}
-              disabled={isGeneratingTask || !taskDescription.trim()}
-            >
-              {isGeneratingTask ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Generate Task
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={showSuggestionDialog} onOpenChange={setShowSuggestionDialog}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -853,13 +849,150 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
             </div>
           </div>
           <DialogFooter className="flex justify-end gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => handleSuggestionResponse(false)}>
+            <Button variant="outline" onClick={() => {
+              setShowSuggestionDialog(false);
+              setIsOpen(true);
+            }}>
               <Edit2 className="w-4 h-4 mr-2" />
               I'll create it manually
             </Button>
-            <Button onClick={() => handleSuggestionResponse(true)} className="gap-2">
+            <Button onClick={() => {
+              setShowSuggestionDialog(false);
+              setIsAddingTaskWithAI(true);
+            }} className="gap-2">
               <Sparkles className="w-4 h-4" />
               Use AI Assistant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddingTaskWithAI} onOpenChange={setIsAddingTaskWithAI}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create Task with AI</DialogTitle>
+            <DialogDescription>
+              Describe the task you want to create, and AI will help you generate it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="ai-tenant-select" className="text-sm font-medium">Organization</Label>
+              <Select
+                value={newTask.tenant_id}
+                onValueChange={(value) => setNewTask({ ...newTask, tenant_id: value })}
+              >
+                <SelectTrigger id="ai-tenant-select" className="w-full">
+                  <SelectValue placeholder="Select organization">
+                    {newTask.tenant_id && (
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage 
+                            src={tenants.find(t => t.id === newTask.tenant_id)?.avatar_url ?? undefined}
+                          />
+                          <AvatarFallback>
+                            {(tenants.find(t => t.id === newTask.tenant_id)?.name || '??').slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex items-center justify-between flex-1 min-w-0">
+                          <span className="truncate">{tenants.find(t => t.id === newTask.tenant_id)?.name}</span>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                            {tenants.find(t => t.id === newTask.tenant_id)?.is_owner && (
+                              <>
+                                <Crown className="w-3 h-3 text-yellow-500" />
+                                Owner
+                              </>
+                            )}
+                            {tenants.find(t => t.id === newTask.tenant_id)?.is_admin && !tenants.find(t => t.id === newTask.tenant_id)?.is_owner && (
+                              <>
+                                <Shield className="w-3 h-3 text-blue-500" />
+                                Admin
+                              </>
+                            )}
+                            {!tenants.find(t => t.id === newTask.tenant_id)?.is_owner && !tenants.find(t => t.id === newTask.tenant_id)?.is_admin && (
+                              <>
+                                <User className="w-3 h-3" />
+                                Member
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants.map((tenant) => (
+                    <SelectItem key={tenant.id} value={tenant.id}>
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={tenant.avatar_url ?? undefined} />
+                          <AvatarFallback>
+                            {tenant.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex items-center justify-between flex-1 min-w-0">
+                          <span className="truncate">{tenant.name}</span>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                            {tenant.is_owner && (
+                              <>
+                                <Crown className="w-3 h-3 text-yellow-500" />
+                                Owner
+                              </>
+                            )}
+                            {tenant.is_admin && !tenant.is_owner && (
+                              <>
+                                <Shield className="w-3 h-3 text-blue-500" />
+                                Admin
+                              </>
+                            )}
+                            {!tenant.is_owner && !tenant.is_admin && (
+                              <>
+                                <User className="w-3 h-3" />
+                                Member
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="task-description">What task do you want to create?</Label>
+              <Textarea
+                id="task-description"
+                value={taskDescription}
+                onChange={(e) => setTaskDescription(e.target.value)}
+                placeholder="Example: Create a high-priority task for John to review the Q4 budget report by next Friday..."
+                className="min-h-[100px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsAddingTaskWithAI(false)
+              setTaskDescription('')
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={generateTaskWithAI}
+              disabled={isGeneratingTask || !taskDescription.trim() || !newTask.tenant_id}
+            >
+              {isGeneratingTask ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate Task
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
