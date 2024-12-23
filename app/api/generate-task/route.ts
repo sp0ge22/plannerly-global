@@ -3,6 +3,15 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import OpenAI from 'openai'
 
+// Add interface for organization user
+interface OrgUser {
+  user_id: string;
+  profile: {
+    name?: string;
+    email?: string;
+  };
+}
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
@@ -22,8 +31,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Create a string of available assignees for the AI to reference
-    const availableAssignees = orgUsers.map((user: any) => 
+    // Use the OrgUser type for mapping
+    const availableAssignees = (orgUsers as OrgUser[]).map(user => 
       user.profile.name || user.profile.email || user.user_id
     ).join(', ')
 
