@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { motion } from 'framer-motion'
-import { Plus, Wand2, Loader2,  } from 'lucide-react'
+import { Plus, Wand2, Loader2, Edit2 } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { Task } from '@/types/task'
 import { Calendar as CalendarIcon } from "lucide-react"
@@ -17,6 +17,7 @@ import { format } from "date-fns"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Crown, Shield, User } from "lucide-react"
+import { Sparkles } from "lucide-react"
 
 type Tenant = {
   id: string
@@ -70,6 +71,12 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
   const [isOpen, setIsOpen] = useState(false)
   const { toast } = useToast()
   const supabase = createClientComponentClient()
+  const [isAddingTaskWithAI, setIsAddingTaskWithAI] = useState(false)
+  const [taskDescription, setTaskDescription] = useState('')
+  const [isGeneratingTask, setIsGeneratingTask] = useState(false)
+  const [missingFields, setMissingFields] = useState<string[]>([])
+  const [isAddingPrompt, setIsAddingPrompt] = useState(false)
+  const [showSuggestionDialog, setShowSuggestionDialog] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -304,9 +311,84 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
     })
   }
 
+  const generateTaskWithAI = async () => {
+    if (!taskDescription.trim()) {
+      toast({
+        title: "Description required",
+        description: "Please describe the task you want to create.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsGeneratingTask(true)
+    try {
+      const response = await fetch('/api/generate-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: taskDescription,
+          tenant_id: newTask.tenant_id,
+          orgUsers: orgUsers
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to generate task')
+
+      const data = await response.json()
+      
+      // Update the task form with the generated data
+      setNewTask({
+        ...newTask,
+        title: data.title === 'incomplete' ? '' : data.title,
+        body: data.body === 'incomplete' ? '' : data.body,
+        assignee: data.assignee === 'incomplete' ? '' : data.assignee,
+        priority: data.priority === 'incomplete' ? 'Medium' : data.priority,
+        status: data.status === 'incomplete' ? 'To Do' : data.status,
+        due: data.due === 'incomplete' ? null : data.due
+      })
+
+      setMissingFields(data.missing_fields || [])
+      setIsAddingTaskWithAI(false)
+      setIsAddingPrompt(true)
+      setTaskDescription('')
+
+      if (data.missing_fields?.length > 0) {
+        toast({
+          title: "Some fields need your input",
+          description: `Please fill in: ${data.missing_fields.join(', ')}`,
+          variant: "default",
+        })
+      } else {
+        toast({
+          title: "Task generated",
+          description: "Review and edit the generated task before saving.",
+        })
+      }
+    } catch (error) {
+      console.error('Error generating task:', error)
+      toast({
+        title: "Generation failed",
+        description: "There was an error generating the task. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGeneratingTask(false)
+    }
+  }
+
+  const handleSuggestionResponse = (useAI: boolean) => {
+    setShowSuggestionDialog(false)
+    if (useAI) {
+      setIsAddingTaskWithAI(true)
+    } else {
+      setIsAddingPrompt(true)
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
+      <DialogTrigger asChild onClick={() => setShowSuggestionDialog(true)}>
         {children}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[800px] max-h-[95vh] overflow-y-auto">
@@ -670,6 +752,118 @@ export function AddTaskDialog({ addTask, children }: AddTaskDialogProps) {
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <Dialog open={isAddingTaskWithAI} onOpenChange={setIsAddingTaskWithAI}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create Task with AI</DialogTitle>
+            <DialogDescription>
+              Describe the task you want to create, and AI will help you generate it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="task-description">What task do you want to create?</Label>
+              <Textarea
+                id="task-description"
+                value={taskDescription}
+                onChange={(e) => setTaskDescription(e.target.value)}
+                placeholder="Example: Create a high-priority task for John to review the Q4 budget report by next Friday..."
+                className="min-h-[100px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsAddingTaskWithAI(false)
+              setTaskDescription('')
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={generateTaskWithAI}
+              disabled={isGeneratingTask || !taskDescription.trim()}
+            >
+              {isGeneratingTask ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate Task
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSuggestionDialog} onOpenChange={setShowSuggestionDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-full bg-primary/10">
+                <Sparkles className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl">Try AI-Assisted Creation?</DialogTitle>
+                <DialogDescription className="text-base">
+                  Let AI help you create a well-structured task
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="py-6">
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <Wand2 className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Intelligent Generation</h4>
+                  <p className="text-sm text-muted-foreground">
+                    AI will help you create detailed, well-structured tasks based on your description
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <User className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Smart Assignment</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically identifies and assigns tasks to team members mentioned in your description
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <CalendarIcon className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Date Recognition</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically detects and sets due dates from your natural language description
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex justify-end gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => handleSuggestionResponse(false)}>
+              <Edit2 className="w-4 h-4 mr-2" />
+              I'll create it manually
+            </Button>
+            <Button onClick={() => handleSuggestionResponse(true)} className="gap-2">
+              <Sparkles className="w-4 h-4" />
+              Use AI Assistant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }
