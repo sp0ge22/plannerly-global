@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { RealtimeChannel } from '@supabase/supabase-js'
 
 type OrgUser = {
   user_id: string
@@ -66,6 +67,8 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
   const [isOpen, setIsOpen] = useState(false)
   const [orgUsers, setOrgUsers] = useState<OrgUser[]>([])
   const supabase = createClientComponentClient()
+  const [comments, setComments] = useState<Comment[]>(task.comments || [])
+  const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
 
   useEffect(() => {
     setEditingTask(task)
@@ -299,6 +302,58 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
       });
     }
   };
+
+  useEffect(() => {
+    // Update comments when task changes
+    setComments(task.comments || [])
+
+    // Set up realtime subscription
+    const channel = supabase
+      .channel(`task-${task.id}-comments`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'comments',
+          filter: `task_id=eq.${task.id}`
+        },
+        async (payload) => {
+          if (payload.eventType === 'INSERT') {
+            // Fetch the complete comment data including profile information
+            const { data: newComment, error } = await supabase
+              .from('comments')
+              .select(`
+                *,
+                profile:user_id (
+                  avatar_url,
+                  name
+                )
+              `)
+              .eq('id', payload.new.id)
+              .single()
+
+            if (!error && newComment) {
+              setComments(prevComments => [...prevComments, newComment])
+              scrollToBottom()
+            }
+          }
+          // Handle updates and deletes if needed
+          // else if (payload.eventType === 'UPDATE') { ... }
+          // else if (payload.eventType === 'DELETE') { ... }
+        }
+      )
+      .subscribe()
+
+    realtimeChannelRef.current = channel
+
+    // Cleanup subscription when component unmounts or task changes
+    return () => {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current)
+      }
+    }
+  }, [task.id, supabase])
 
   return (
     <Dialog onOpenChange={(open) => {
@@ -625,7 +680,7 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
                     <MessageSquare className="w-5 h-5 mr-2" />
                     Comments
                     <span className="ml-2 text-sm text-gray-500">
-                      ({task.comments?.length || 0})
+                      ({comments?.length || 0})
                     </span>
                   </h3>
                   <div 
@@ -634,8 +689,8 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
                     ref={scrollViewportRef}
                   >
                     <div className="p-4 space-y-4">
-                      {task.comments && task.comments.length > 0 ? (
-                        task.comments.map(comment => (
+                      {comments && comments.length > 0 ? (
+                        comments.map(comment => (
                           <motion.div
                             key={comment.id}
                             initial={{ opacity: 0, y: 20 }}
