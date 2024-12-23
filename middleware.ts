@@ -5,81 +5,66 @@ import type { NextRequest } from 'next/server'
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
-  
+
   try {
-    // Try to refresh the session first
     const {
       data: { session },
       error
     } = await supabase.auth.getSession()
 
-    // Handle JWT expiration or other auth errors
-    if (error?.message?.includes('JWT') || error?.message?.includes('expired')) {
-      console.error('JWT error:', error)
-      // For API routes, return 401 response
+    // Handle JWT expiration error
+    if (error?.message?.includes('JWT expired')) {
+      // If the request is an API request, return 401
       if (req.nextUrl.pathname.startsWith('/api/')) {
         return NextResponse.json(
-          { error: 'Authentication expired', code: 'AUTH_EXPIRED' },
+          { error: 'Session expired' },
           { status: 401 }
         )
       }
-      // For page routes, redirect to landing
-      return NextResponse.redirect(new URL('/', req.url))
+      
+      // For non-API requests, redirect to the landing page
+      const redirectUrl = new URL('/', req.url)
+      return NextResponse.redirect(redirectUrl)
     }
 
-    // Public routes that don't require authentication
-    const publicRoutes = ['/', '/auth/callback']
-    const isPublicRoute = publicRoutes.includes(req.nextUrl.pathname)
-
-    // If user is logged in and trying to access public routes, redirect to home
-    if (session && isPublicRoute) {
-      return NextResponse.redirect(new URL('/home', req.url))
-    }
-
-    // If user is not logged in and trying to access protected routes
-    if (!session && !isPublicRoute) {
-      // For API routes, return 401 response
-      if (req.nextUrl.pathname.startsWith('/api/')) {
-        return NextResponse.json(
-          { error: 'Authentication required', code: 'AUTH_REQUIRED' },
-          { status: 401 }
-        )
+    // If there's no session and the path isn't public, redirect to landing
+    if (!session) {
+      const publicPaths = ['/', '/login', '/signup', '/reset-password']
+      const isPublicPath = publicPaths.includes(req.nextUrl.pathname)
+      
+      if (!isPublicPath) {
+        const redirectUrl = new URL('/', req.url)
+        return NextResponse.redirect(redirectUrl)
       }
-      // For page routes, redirect to landing
-      return NextResponse.redirect(new URL('/', req.url))
-    }
-
-    // Redirect all auth routes to root
-    const restrictedAuthPaths = ['/auth/signup', '/auth/verify', '/auth/login']
-    if (restrictedAuthPaths.includes(req.nextUrl.pathname)) {
-      return NextResponse.redirect(new URL('/', req.url))
     }
 
     return res
   } catch (error) {
-    console.error('Session error:', error)
-    // For API routes, return 401 response
+    console.error('Middleware error:', error)
+    
+    // If there's an error, treat it as an unauthorized request
     if (req.nextUrl.pathname.startsWith('/api/')) {
       return NextResponse.json(
-        { error: 'Authentication error', code: 'AUTH_ERROR' },
+        { error: 'Unauthorized' },
         { status: 401 }
       )
     }
-    // For page routes, redirect to landing if not on a public route
-    const isPublicRoute = ['/', '/auth/callback'].includes(req.nextUrl.pathname)
-    if (!isPublicRoute) {
-      return NextResponse.redirect(new URL('/', req.url))
-    }
-    return res
+    
+    const redirectUrl = new URL('/', req.url)
+    return NextResponse.redirect(redirectUrl)
   }
 }
 
+// Specify which routes the middleware should run on
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|public).*)',
-    '/api/:path*',  // Add API routes to the matcher
-    '/auth/signup',
-    '/auth/verify',
-    '/auth/login',
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

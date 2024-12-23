@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Plus, Folder, Link2, Search, Trash2, Pencil, Library, Sparkles, RefreshCw, Wand2, MessageSquare, Edit2 } from 'lucide-react'
+import { Loader2, Plus, Folder, Link2, Search, Trash2, Pencil, Library, Sparkles, RefreshCw, Wand2, MessageSquare, Edit2, Crown, Shield, User } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 
@@ -42,6 +42,8 @@ interface Tenant {
   id: string
   name: string
   avatar_url: string | null
+  is_owner?: boolean
+  is_admin?: boolean
 }
 
 interface UserTenant {
@@ -223,10 +225,14 @@ export default function ResourcesPage() {
     try {
       const response = await fetch('/api/resources')
       
-      // Handle authentication errors
       if (response.status === 401) {
+        // Session expired, redirect to landing page
         window.location.href = '/'
         return
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch resources')
       }
 
       const data = await response.json()
@@ -243,10 +249,28 @@ export default function ResourcesPage() {
         })
       }
       
+      // Sort tenants by role priority
+      const sortedTenants = data.tenants.map((tenant: Tenant) => ({
+        ...tenant,
+        is_owner: data.userTenants?.some((ut: UserTenant) => ut.tenant_id === tenant.id && ut.is_owner),
+        is_admin: data.userTenants?.some((ut: UserTenant) => ut.tenant_id === tenant.id && ut.is_admin)
+      })).sort((a: Tenant, b: Tenant) => {
+        if (a.is_owner && !b.is_owner) return -1
+        if (!a.is_owner && b.is_owner) return 1
+        if (a.is_admin && !b.is_admin) return -1
+        if (!a.is_admin && b.is_admin) return 1
+        return a.name.localeCompare(b.name)
+      })
+      
       setResources(data.resources)
       setCategories(data.categories)
-      setTenants(data.tenants)
+      setTenants(sortedTenants)
       setUserTenants(data.userTenants || [])
+
+      // Set default tenant for new resources
+      if (sortedTenants.length > 0) {
+        setNewResource(prev => ({ ...prev, tenant_id: sortedTenants[0].id }))
+      }
 
       // Debug log after setting state
       console.log('UserTenants state after update:', data.userTenants || [])
@@ -802,7 +826,29 @@ export default function ResourcesPage() {
                               {tenants.find(t => t.id === newResource.tenant_id)?.name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <span>{tenants.find(t => t.id === newResource.tenant_id)?.name}</span>
+                          <div className="flex items-center justify-between flex-1 min-w-0">
+                            <span className="truncate">{tenants.find(t => t.id === newResource.tenant_id)?.name}</span>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                              {tenants.find(t => t.id === newResource.tenant_id)?.is_owner && (
+                                <>
+                                  <Crown className="w-3 h-3 text-yellow-500" />
+                                  Owner
+                                </>
+                              )}
+                              {tenants.find(t => t.id === newResource.tenant_id)?.is_admin && !tenants.find(t => t.id === newResource.tenant_id)?.is_owner && (
+                                <>
+                                  <Shield className="w-3 h-3 text-blue-500" />
+                                  Admin
+                                </>
+                              )}
+                              {!tenants.find(t => t.id === newResource.tenant_id)?.is_owner && !tenants.find(t => t.id === newResource.tenant_id)?.is_admin && (
+                                <>
+                                  <User className="w-3 h-3" />
+                                  Member
+                                </>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       )}
                     </SelectValue>
@@ -817,7 +863,29 @@ export default function ResourcesPage() {
                               {tenant.name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <span>{tenant.name}</span>
+                          <div className="flex items-center justify-between flex-1 min-w-0">
+                            <span className="truncate">{tenant.name}</span>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                              {tenant.is_owner && (
+                                <>
+                                  <Crown className="w-3 h-3 text-yellow-500" />
+                                  Owner
+                                </>
+                              )}
+                              {tenant.is_admin && !tenant.is_owner && (
+                                <>
+                                  <Shield className="w-3 h-3 text-blue-500" />
+                                  Admin
+                                </>
+                              )}
+                              {!tenant.is_owner && !tenant.is_admin && (
+                                <>
+                                  <User className="w-3 h-3" />
+                                  Member
+                                </>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       </SelectItem>
                     ))}
@@ -961,24 +1029,44 @@ export default function ResourcesPage() {
           <DialogHeader>
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
-                <AvatarImage src={selectedResource?.tenant?.avatar_url ?? undefined} />
+                <AvatarImage src={tenants.find(t => t.id === selectedResource?.tenant_id)?.avatar_url ?? undefined} />
                 <AvatarFallback>
-                  {selectedResource?.tenant?.name?.slice(0, 2).toUpperCase() ?? 'UN'}
+                  {tenants.find(t => t.id === selectedResource?.tenant_id)?.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div>
                 <DialogTitle className="text-xl">Confirm Deletion</DialogTitle>
                 <DialogDescription className="mt-1">
-                  Enter {selectedResource?.tenant?.name}'s PIN to delete this resource
+                  Enter {tenants.find(t => t.id === selectedResource?.tenant_id)?.name}'s PIN to delete this resource
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
           <div className="mt-6">
             <div className="space-y-4">
-              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+              <div className="bg-muted/50 p-4 rounded-lg space-y-3">
                 <h4 className="font-medium text-sm">Resource to Delete:</h4>
-                <p className="text-sm text-muted-foreground">{selectedResource?.title}</p>
+                <div className="flex items-start gap-3">
+                  {selectedResource?.image_url ? (
+                    <img 
+                      src={selectedResource.image_url} 
+                      alt={selectedResource.title}
+                      className="w-12 h-12 object-cover rounded-lg"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-neutral-100 flex items-center justify-center">
+                      <Link2 className="w-6 h-6 text-neutral-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-1">
+                    <p className="font-medium text-sm">{selectedResource?.title}</p>
+                    {selectedResource?.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {selectedResource.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="space-y-3">
                 <Label htmlFor="pin" className="text-sm font-medium">
@@ -1231,7 +1319,29 @@ export default function ResourcesPage() {
                               {tenants.find(t => t.id === newResource.tenant_id)?.name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <span>{tenants.find(t => t.id === newResource.tenant_id)?.name}</span>
+                          <div className="flex items-center justify-between flex-1 min-w-0">
+                            <span className="truncate">{tenants.find(t => t.id === newResource.tenant_id)?.name}</span>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                              {tenants.find(t => t.id === newResource.tenant_id)?.is_owner && (
+                                <>
+                                  <Crown className="w-3 h-3 text-yellow-500" />
+                                  Owner
+                                </>
+                              )}
+                              {tenants.find(t => t.id === newResource.tenant_id)?.is_admin && !tenants.find(t => t.id === newResource.tenant_id)?.is_owner && (
+                                <>
+                                  <Shield className="w-3 h-3 text-blue-500" />
+                                  Admin
+                                </>
+                              )}
+                              {!tenants.find(t => t.id === newResource.tenant_id)?.is_owner && !tenants.find(t => t.id === newResource.tenant_id)?.is_admin && (
+                                <>
+                                  <User className="w-3 h-3" />
+                                  Member
+                                </>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       )}
                     </SelectValue>
@@ -1246,7 +1356,29 @@ export default function ResourcesPage() {
                               {tenant.name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <span>{tenant.name}</span>
+                          <div className="flex items-center justify-between flex-1 min-w-0">
+                            <span className="truncate">{tenant.name}</span>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                              {tenant.is_owner && (
+                                <>
+                                  <Crown className="w-3 h-3 text-yellow-500" />
+                                  Owner
+                                </>
+                              )}
+                              {tenant.is_admin && !tenant.is_owner && (
+                                <>
+                                  <Shield className="w-3 h-3 text-blue-500" />
+                                  Admin
+                                </>
+                              )}
+                              {!tenant.is_owner && !tenant.is_admin && (
+                                <>
+                                  <User className="w-3 h-3" />
+                                  Member
+                                </>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       </SelectItem>
                     ))}
@@ -1746,11 +1878,6 @@ function ResourceCard({
                 {resource.description && (
                   <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
                     {resource.description}
-                  </p>
-                )}
-                {tenant && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {tenant.name}
                   </p>
                 )}
               </div>
