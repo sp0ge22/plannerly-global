@@ -1292,8 +1292,14 @@ export default function ResourcesPage() {
               <div>
                 <DialogTitle className="text-xl">Add Resource with AI</DialogTitle>
                 <DialogDescription className="mt-1">
-                  Let AI help you create a resource by analyzing a company or tool
-                </DialogDescription>
+                Effortlessly create a resource with just a single input. Simply type the business name, and our tool automatically generates a complete resource, including the logo, title, URL, and description—all in one step.
+
+
+
+
+
+
+</DialogDescription>
               </div>
             </div>
           </DialogHeader>
