@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Plus, Folder, Link2, Search, Trash2, Pencil, Library, Sparkles, RefreshCw } from 'lucide-react'
+import { Loader2, Plus, Folder, Link2, Search, Trash2, Pencil, Library, Sparkles, RefreshCw, Wand2, MessageSquare, Edit2 } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 
@@ -65,6 +65,7 @@ export default function ResourcesPage() {
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null)
   const [pin, setPin] = useState('')
   const { toast } = useToast()
+  const [showAddResourceSuggestionDialog, setShowAddResourceSuggestionDialog] = useState(false)
 
   // Form states
   const [newResource, setNewResource] = useState<Partial<Resource>>({
@@ -86,14 +87,39 @@ export default function ResourcesPage() {
   // Function to handle category creation
   const handleAddCategory = async () => {
     try {
-      console.log('Creating new category:', newCategory)
+      if (!newResource.tenant_id) {
+        throw new Error('Please select an organization first')
+      }
+
+      // Check if category already exists for this tenant
+      const existingCategory = categories.find(
+        cat => cat.name.toLowerCase() === newCategory.toLowerCase() && 
+        cat.tenant_id === newResource.tenant_id
+      )
+
+      if (existingCategory) {
+        // If category exists, select it and close the dialog
+        setNewResource(prev => ({
+          ...prev,
+          category_id: existingCategory.id
+        }))
+        setIsAddingCategory(false)
+        setNewCategory('')
+        toast({
+          title: "Category exists",
+          description: "This category already exists and has been selected.",
+        })
+        return existingCategory
+      }
+
+      console.log('Creating new category:', newCategory, 'for tenant:', newResource.tenant_id)
 
       const response = await fetch('/api/resources/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           name: newCategory,
-          tenant_id: selectedTenant !== 'all' ? selectedTenant : undefined
+          tenant_id: newResource.tenant_id
         }),
       })
 
@@ -117,44 +143,9 @@ export default function ResourcesPage() {
         return [...prev, data]
       })
 
-      // If we're in edit mode, update the resource with the new category
-      if (editingResource) {
-        const updatedResource = {
-          ...editingResource,
-          category_id: data.id
-        }
-        
-        console.log('Updating resource with new category:', updatedResource)
-
-        const updateResponse = await fetch(`/api/resources/${editingResource.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedResource),
-        })
-
-        if (!updateResponse.ok) {
-          const updateError = await updateResponse.json()
-          throw new Error(updateError.error || 'Failed to update resource category')
-        }
-
-        const updatedResourceData = await updateResponse.json()
-        console.log('Updated resource data:', updatedResourceData)
-        
-        setResources(prev => prev.map(r => 
-          r.id === updatedResourceData.id ? updatedResourceData : r
-        ))
-        
-        setEditingResource(updatedResourceData)
-      } else {
-        setNewResource(prev => ({ ...prev, category_id: data.id.toString() }))
-      }
-
-      setNewCategory('')
-      setIsAddingCategory(false)
-      
       toast({
         title: "Category added",
-        description: "New category has been created and assigned.",
+        description: "New category has been created.",
       })
 
       return data
@@ -231,6 +222,13 @@ export default function ResourcesPage() {
   const fetchResources = async () => {
     try {
       const response = await fetch('/api/resources')
+      
+      // Handle authentication errors
+      if (response.status === 401) {
+        window.location.href = '/'
+        return
+      }
+
       const data = await response.json()
       console.log('Full API response:', data)
       console.log('Fetched tenants:', data.tenants)
@@ -270,10 +268,20 @@ export default function ResourcesPage() {
 
   const handleAddResource = async () => {
     try {
+      // Only include the fields that exist in the database schema
+      const resourceToAdd = {
+        title: newResource.title,
+        url: newResource.url,
+        description: newResource.description || null,
+        category_id: newResource.category_id,
+        image_url: newResource.image_url,
+        tenant_id: newResource.tenant_id
+      }
+
       const response = await fetch('/api/resources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newResource),
+        body: JSON.stringify(resourceToAdd),
       })
 
       if (!response.ok) throw new Error('Failed to add resource')
@@ -418,52 +426,83 @@ export default function ResourcesPage() {
     }
   }
 
-  const handleRefreshLogo = async () => {
-    if (!resourceUrl) return
-
-    setIsLoadingAI(true)
-    try {
-      const response = await fetch('/api/resources/find-logo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: resourceUrl }),
-      })
-
-      if (!response.ok) throw new Error('Failed to find logo')
-
-      const { image_url } = await response.json()
-      if (aiResourceSuggestion) {
-        setAiResourceSuggestion({
-          ...aiResourceSuggestion,
-          image_url
-        })
-      }
-    } catch (error) {
-      console.error('Error finding logo:', error)
-      toast({
-        title: "Failed to find logo",
-        description: "There was an error finding a new logo. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoadingAI(false)
-    }
-  }
-
   const handleAddAISuggestion = () => {
     if (!aiResourceSuggestion) return
 
     // Create new resource with AI suggestion data
     const newResourceData = {
-      ...newResource,
-      ...aiResourceSuggestion,
+      title: aiResourceSuggestion.title,
+      description: aiResourceSuggestion.description,
+      url: aiResourceSuggestion.url,
+      image_url: aiResourceSuggestion.image_url,
       tenant_id: selectedTenant !== 'all' ? selectedTenant : tenants[0]?.id || '',
-      category_id: aiResourceSuggestion.category_id || null // Use the category_id from AI suggestion
+      category_id: aiResourceSuggestion.category_id || null
     }
 
     setNewResource(newResourceData)
     setIsAIDialogOpen(false)
     setIsAddDialogOpen(true)
+  }
+
+  // Add new state for category management
+  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false)
+  const [managingTenantId, setManagingTenantId] = useState<string>('')
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null)
+
+  // Add function to check if user can manage categories for a tenant
+  const canManageCategories = (tenantId: string) => {
+    const userTenant = userTenants.find(ut => ut.tenant_id === tenantId)
+    return userTenant?.is_owner || userTenant?.is_admin === true || userTenant?.is_admin === null
+  }
+
+  // Add function to check if category can be deleted
+  const canDeleteCategory = (categoryId: number) => {
+    return !resources.some(resource => resource.category_id === categoryId)
+  }
+
+  // Add function to handle category deletion
+  const handleDeleteCategory = async (category: Category) => {
+    try {
+      const response = await fetch(`/api/resources/categories/${category.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: category.tenant_id }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete category')
+      }
+
+      // Update local state
+      setCategories(prev => prev.filter(c => c.id !== category.id))
+      setCategoryToDelete(null)
+      
+      toast({
+        title: "Category deleted",
+        description: "The category has been removed successfully.",
+      })
+    } catch (error) {
+      console.error('Error deleting category:', error)
+      toast({
+        title: "Failed to delete category",
+        description: error instanceof Error ? error.message : "There was an error deleting the category.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleAddResourceClick = () => {
+    setShowAddResourceSuggestionDialog(true)
+  }
+
+  const handleResourceSuggestionResponse = (useAI: boolean) => {
+    setShowAddResourceSuggestionDialog(false)
+    if (useAI) {
+      setIsAIDialogOpen(true)
+    } else {
+      setIsAddDialogOpen(true)
+    }
   }
 
   return (
@@ -484,11 +523,15 @@ export default function ResourcesPage() {
                   <Library className="w-4 h-4 mr-2" />
                   Resource Library
                 </Button>
+                <Button variant="outline" onClick={() => setIsManageCategoriesOpen(true)} size="sm" className="h-9">
+                  <Folder className="w-4 h-4 mr-2" />
+                  Manage Categories
+                </Button>
                 <Button variant="outline" onClick={() => setIsAIDialogOpen(true)} size="sm" className="h-9">
                   <Sparkles className="w-4 h-4 mr-2" />
                   Add with AI
                 </Button>
-                <Button onClick={() => setIsAddDialogOpen(true)} size="sm" className="h-9">
+                <Button onClick={handleAddResourceClick} size="sm" className="h-9">
                   <Plus className="w-4 h-4 mr-2" />
                   Add Resource
                 </Button>
@@ -707,6 +750,8 @@ export default function ResourcesPage() {
             image_url: null,
             tenant_id: ''
           })
+          setIsAddingCategory(false)
+          setNewCategory('')
         } else {
           // Set default organization based on priority
           const defaultTenant = tenants
@@ -731,145 +776,153 @@ export default function ResourcesPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Resource</DialogTitle>
+            <DialogDescription>
+              Add a resource to your organization's library. Start by selecting the organization and category.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="organization">Organization</Label>
-              <Select
-                value={newResource.tenant_id}
-                onValueChange={(value) => setNewResource(prev => ({ ...prev, tenant_id: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select organization">
-                    {newResource.tenant_id && (
-                      <div className="flex items-center space-x-2">
-                        <Avatar className="h-5 w-5">
-                          <AvatarImage 
-                            src={tenants.find(t => t.id === newResource.tenant_id)?.avatar_url || undefined}
-                          />
-                          <AvatarFallback>
-                            {tenants.find(t => t.id === newResource.tenant_id)?.name.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span>{tenants.find(t => t.id === newResource.tenant_id)?.name}</span>
-                      </div>
-                    )}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {tenants.map((tenant) => (
-                    <SelectItem key={tenant.id} value={tenant.id}>
-                      <div className="flex items-center space-x-2">
-                        <Avatar className="h-5 w-5">
-                          <AvatarImage src={tenant.avatar_url || undefined} />
-                          <AvatarFallback>
-                            {tenant.name.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span>{tenant.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+          <div className="space-y-4 py-4">
+            {/* Step 1: Organization */}
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="space-y-2">
+                <Label htmlFor="organization">Organization</Label>
+                <Select
+                  value={newResource.tenant_id}
+                  onValueChange={(value) => setNewResource(prev => ({ ...prev, tenant_id: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select organization">
+                      {newResource.tenant_id && (
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage 
+                              src={tenants.find(t => t.id === newResource.tenant_id)?.avatar_url || undefined}
+                            />
+                            <AvatarFallback>
+                              {tenants.find(t => t.id === newResource.tenant_id)?.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{tenants.find(t => t.id === newResource.tenant_id)?.name}</span>
+                        </div>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenants.map((tenant) => (
+                      <SelectItem key={tenant.id} value={tenant.id}>
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={tenant.avatar_url || undefined} />
+                            <AvatarFallback>
+                              {tenant.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{tenant.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                value={newResource.title}
-                onChange={(e) => setNewResource(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="Enter resource title"
-              />
+
+            {/* Step 2: Resource Details */}
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  value={newResource.title}
+                  onChange={(e) => setNewResource(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Enter resource title"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="url">URL</Label>
+                <Input
+                  id="url"
+                  value={newResource.url}
+                  onChange={(e) => setNewResource(prev => ({ ...prev, url: e.target.value }))}
+                  placeholder="Enter resource URL"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description (optional)</Label>
+                <Input
+                  id="description"
+                  value={newResource.description ?? ''}
+                  onChange={(e) => setNewResource(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Enter resource description"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="image_url">Image URL (optional)</Label>
+                <Input
+                  id="image_url"
+                  value={newResource.image_url ?? ''}
+                  onChange={(e) => setNewResource(prev => ({ ...prev, image_url: e.target.value || null }))}
+                  placeholder="Enter image URL"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="url">URL</Label>
-              <Input
-                id="url"
-                value={newResource.url}
-                onChange={(e) => setNewResource(prev => ({ ...prev, url: e.target.value }))}
-                placeholder="Enter resource URL"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description (optional)</Label>
-              <Input
-                id="description"
-                value={newResource.description ?? ''}
-                onChange={(e) => setNewResource(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Enter resource description"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="image_url">Image URL (optional)</Label>
-              <Input
-                id="image_url"
-                value={newResource.image_url ?? ''}
-                onChange={(e) => setNewResource(prev => ({ ...prev, image_url: e.target.value || null }))}
-                placeholder="Enter image URL"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              {!isAddingCategory ? (
-                <div className="flex items-center space-x-2">
-                  <Select
-                    value={newResource.category_id?.toString() ?? ''}
-                    onValueChange={(value) => setNewResource(prev => ({ 
+
+            {/* Step 3: Category Selection */}
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="space-y-2">
+                <Label htmlFor="category">Category</Label>
+                <Select
+                  value={newResource.category_id?.toString() ?? ''}
+                  onValueChange={(value) => {
+                    if (value === 'new') {
+                      if (!newResource.tenant_id) {
+                        toast({
+                          title: "Select an organization",
+                          description: "Please select an organization before creating a new category.",
+                          variant: "destructive",
+                        })
+                        return
+                      }
+                      setIsAddingCategory(true)
+                      return
+                    }
+                    setNewResource(prev => ({ 
                       ...prev, 
                       category_id: value ? parseInt(value) : null 
-                    }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories
-                        .filter(category => category.tenant_id === newResource.tenant_id)
-                        .map(category => (
-                          <SelectItem key={category.id} value={category.id.toString()}>
-                            {category.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsAddingCategory(true)}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2">
-                  <Input
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder="New category name"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleAddCategory}
-                    disabled={!newCategory}
-                  >
-                    Add
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setIsAddingCategory(false)
-                      setNewCategory('')
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              )}
+                    }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={newResource.tenant_id ? "Select a category" : "Select an organization first"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {newResource.tenant_id ? (
+                      <>
+                        {categories
+                          .filter(category => category.tenant_id === newResource.tenant_id)
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map(category => (
+                            <SelectItem key={category.id} value={category.id.toString()}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        <SelectItem value="new" className="text-primary font-medium">
+                          + Add New Category
+                        </SelectItem>
+                      </>
+                    ) : (
+                      <SelectItem value="disabled" disabled>
+                        Select an organization first
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setIsAddDialogOpen(false)
@@ -881,6 +934,8 @@ export default function ResourcesPage() {
                 image_url: null,
                 tenant_id: ''
               })
+              setIsAddingCategory(false)
+              setNewCategory('')
             }}>
               Cancel
             </Button>
@@ -1142,153 +1197,478 @@ export default function ResourcesPage() {
       <Dialog open={isAIDialogOpen} onOpenChange={setIsAIDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Add Resource with AI</DialogTitle>
-            <DialogDescription>
-              Enter a company or tool name and let AI help you create a resource
-            </DialogDescription>
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <Sparkles className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl">Add Resource with AI</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Let AI help you create a resource by analyzing a company or tool
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter company name (e.g., FedEx, Slack)"
-                value={resourceUrl}
-                onChange={(e) => setResourceUrl(e.target.value)}
-              />
-              <Button onClick={handleAddWithAI} disabled={isLoadingAI || !resourceUrl}>
-                {isLoadingAI ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4" />
-                )}
-                Analyze
-              </Button>
-            </div>
+          <div className="mt-6">
+            <div className="space-y-4">
+              {/* Organization Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="ai-organization">Organization</Label>
+                <Select
+                  value={newResource.tenant_id}
+                  onValueChange={(value) => setNewResource(prev => ({ ...prev, tenant_id: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select organization">
+                      {newResource.tenant_id && (
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage 
+                              src={tenants.find(t => t.id === newResource.tenant_id)?.avatar_url || undefined}
+                            />
+                            <AvatarFallback>
+                              {tenants.find(t => t.id === newResource.tenant_id)?.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{tenants.find(t => t.id === newResource.tenant_id)?.name}</span>
+                        </div>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenants.map((tenant) => (
+                      <SelectItem key={tenant.id} value={tenant.id}>
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={tenant.avatar_url || undefined} />
+                            <AvatarFallback>
+                              {tenant.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{tenant.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {aiResourceSuggestion && (
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  {aiResourceSuggestion.image_url ? (
-                    <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-neutral-100">
-                      <img
-                        src={aiResourceSuggestion.image_url}
-                        alt="Resource logo"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-16 h-16 rounded-lg flex-shrink-0 bg-neutral-100 flex items-center justify-center">
-                      <Link2 className="w-6 h-6 text-neutral-400" />
+              {/* Company Input */}
+              <div className="space-y-2">
+                <Label htmlFor="company-name">Company or Website</Label>
+                <div className="space-y-2">
+                  {!aiResourceSuggestion && (
+                    <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
+                      <p>Quick Tips:</p>
+                      <ul className="mt-1 space-y-1 ml-4 list-disc">
+                        <li>Simply type the name (e.g., "Slack" or "Netflix")</li>
+                        <li>Don't include www, http, or any URL information</li>
+                        <li>Works best with well-known companies and websites</li>
+                        <li>If AI can't find your resource, you can easily add it manually below</li>
+                      </ul>
                     </div>
                   )}
-                  <div className="flex-grow space-y-2">
-                    <h3 className="font-medium">{aiResourceSuggestion.title}</h3>
-                    <p className="text-sm text-muted-foreground">{aiResourceSuggestion.description}</p>
-                    <div className="text-xs text-muted-foreground">
-                      {aiResourceSuggestion.url}
-                    </div>
+                  <div className="flex gap-2">
+                    <Input
+                      id="company-name"
+                      placeholder="Enter company or website name"
+                      value={resourceUrl}
+                      onChange={(e) => setResourceUrl(e.target.value)}
+                      className="h-11"
+                    />
+                    <Button 
+                      onClick={handleAddWithAI} 
+                      disabled={isLoadingAI || !resourceUrl || !newResource.tenant_id}
+                      className="h-11 px-6"
+                    >
+                      {isLoadingAI ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4" />
+                      )}
+                      <span className="ml-2">Analyze</span>
+                    </Button>
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label>Category</Label>
-                  {!isAddingCategory ? (
-                    <div className="flex items-center space-x-2">
-                      <Select
-                        value={newResource.category_id?.toString() ?? ''}
-                        onValueChange={(value) => setNewResource(prev => ({ 
-                          ...prev, 
-                          category_id: value ? parseInt(value) : null 
-                        }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories
-                            .filter(category => category.tenant_id === (selectedTenant !== 'all' ? selectedTenant : tenants[0]?.id))
-                            .map(category => (
-                              <SelectItem key={category.id} value={category.id.toString()}>
-                                {category.name}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setIsAddingCategory(true)
-                          if (aiResourceSuggestion.suggestedCategory) {
-                            setNewCategory(aiResourceSuggestion.suggestedCategory)
-                          }
-                        }}
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <Input
-                        value={newCategory}
-                        onChange={(e) => setNewCategory(e.target.value)}
-                        placeholder="New category name"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleAddCategory}
-                        disabled={!newCategory}
-                      >
-                        Add
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => {
-                          setIsAddingCategory(false)
-                          setNewCategory('')
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                  {aiResourceSuggestion.suggestedCategory && !isAddingCategory && !newResource.category_id && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      AI suggests creating a new category: "{aiResourceSuggestion.suggestedCategory}"
-                    </p>
-                  )}
-                </div>
-
-                <Button
-                  variant="outline"
-                  onClick={handleRefreshLogo}
-                  disabled={isLoadingAI}
-                  className="w-full gap-2"
-                >
-                  {isLoadingAI ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-4 h-4" />
-                  )}
-                  Try Different Logo
-                </Button>
               </div>
-            )}
+
+              {/* AI Suggestion Result */}
+              {aiResourceSuggestion && (
+                <div className="bg-muted/50 rounded-lg p-4 space-y-4">
+                  <div className="flex items-start gap-4">
+                    {aiResourceSuggestion.image_url ? (
+                      <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-neutral-100">
+                        <img
+                          src={aiResourceSuggestion.image_url}
+                          alt="Resource logo"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg flex-shrink-0 bg-neutral-100 flex items-center justify-center">
+                        <Link2 className="w-6 h-6 text-neutral-400" />
+                      </div>
+                    )}
+                    <div className="flex-grow space-y-2">
+                      <h3 className="font-medium">{aiResourceSuggestion.title}</h3>
+                      <p className="text-sm text-muted-foreground">{aiResourceSuggestion.description}</p>
+                      <div className="text-xs text-muted-foreground">
+                        {aiResourceSuggestion.url}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-background/50 rounded-lg p-3 text-sm text-muted-foreground">
+                    <p>
+                      If you'd like to use a different image, you can add your own image URL in the next step. 
+                      The image URL should end in .jpg, .png, or .gif.
+                    </p>
+                    <p className="mt-2">
+                      <strong>Tip:</strong> To find an image URL from Google Images:
+                    </p>
+                    <ol className="list-decimal ml-4 mt-1 space-y-1">
+                      <li>Search for the company/tool on Google Images</li>
+                      <li>Right-click on the desired image</li>
+                      <li>Select "Open image in new tab" or "Copy image address"</li>
+                      <li>Use the URL that ends in .jpg, .png, or .gif</li>
+                    </ol>
+                  </div>
+                </div>
+              )}
+
+              {!newResource.tenant_id && (
+                <p className="text-sm text-muted-foreground">
+                  Please select an organization before analyzing.
+                </p>
+              )}
+            </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAIDialogOpen(false)}>
-              Cancel
-            </Button>
+          <DialogFooter className="mt-6 flex-col gap-4">
             <Button
               onClick={handleAddAISuggestion}
-              disabled={!aiResourceSuggestion || !newResource.category_id}
-              className="gap-2"
+              disabled={!aiResourceSuggestion}
+              className="w-full gap-2"
             >
               <Plus className="w-4 h-4" />
               Add Resource
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsAIDialogOpen(false)
+                setIsAddDialogOpen(true)
+              }}
+              className="w-full text-muted-foreground hover:text-primary"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Prefer to add manually? Click here
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Category Dialog */}
+      <Dialog open={isAddingCategory} onOpenChange={(open) => {
+        if (!open) {
+          setIsAddingCategory(false)
+          setNewCategory('')
+        }
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-12 w-12">
+                <AvatarImage 
+                  src={tenants.find(t => t.id === newResource.tenant_id)?.avatar_url || undefined}
+                />
+                <AvatarFallback>
+                  {tenants.find(t => t.id === newResource.tenant_id)?.name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <DialogTitle className="text-xl">Add New Category</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Create a new category for {tenants.find(t => t.id === newResource.tenant_id)?.name}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="mt-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-category">Category Name</Label>
+                <Input
+                  id="new-category"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="Enter category name"
+                  className="h-11"
+                />
+              </div>
+
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <h4 className="font-medium text-sm">Existing Categories</h4>
+                <div className="space-y-1.5">
+                  {categories
+                    .filter(category => category.tenant_id === newResource.tenant_id)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(category => (
+                      <div key={category.id} className="text-sm text-muted-foreground flex items-center gap-2">
+                        {category.image_url ? (
+                          <img src={category.image_url} alt={category.name} className="w-4 h-4 rounded" />
+                        ) : (
+                          <Folder className="w-4 h-4" />
+                        )}
+                        {category.name}
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddingCategory(false)
+                setNewCategory('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  const newCategoryData = await handleAddCategory()
+                  if (newCategoryData) {
+                    setNewResource(prev => ({
+                      ...prev,
+                      category_id: newCategoryData.id
+                    }))
+                  }
+                  setIsAddingCategory(false)
+                  setNewCategory('')
+                } catch (error) {
+                  console.error('Error adding category:', error)
+                }
+              }}
+              disabled={!newCategory}
+              className="gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Category
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Categories Dialog */}
+      <Dialog open={isManageCategoriesOpen} onOpenChange={setIsManageCategoriesOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Manage Categories</DialogTitle>
+            <DialogDescription>
+              View and manage categories for your organizations.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Organization</Label>
+              <Select
+                value={managingTenantId}
+                onValueChange={setManagingTenantId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select organization">
+                    {managingTenantId && (
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage 
+                            src={tenants.find(t => t.id === managingTenantId)?.avatar_url || undefined}
+                          />
+                          <AvatarFallback>
+                            {tenants.find(t => t.id === managingTenantId)?.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{tenants.find(t => t.id === managingTenantId)?.name}</span>
+                      </div>
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants
+                    .filter(tenant => canManageCategories(tenant.id))
+                    .map((tenant) => (
+                      <SelectItem key={tenant.id} value={tenant.id}>
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={tenant.avatar_url || undefined} />
+                            <AvatarFallback>
+                              {tenant.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{tenant.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {managingTenantId && (
+              <div className="border rounded-lg">
+                <div className="divide-y">
+                  {categories
+                    .filter(category => category.tenant_id === managingTenantId)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(category => {
+                      const resourceCount = resources.filter(r => r.category_id === category.id).length
+                      return (
+                        <div key={category.id} className="flex items-center justify-between p-4">
+                          <div className="flex items-center gap-3">
+                            {category.image_url ? (
+                              <img src={category.image_url} alt={category.name} className="w-8 h-8 rounded" />
+                            ) : (
+                              <Folder className="w-8 h-8 text-muted-foreground" />
+                            )}
+                            <div>
+                              <h4 className="font-medium">{category.name}</h4>
+                              <p className="text-sm text-muted-foreground">
+                                {resourceCount} resource{resourceCount !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditingCategory(category)
+                                setIsEditCategoryDialogOpen(true)
+                              }}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setCategoryToDelete(category)}
+                              disabled={!canDeleteCategory(category.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Category Confirmation Dialog */}
+      <Dialog open={!!categoryToDelete} onOpenChange={(open) => !open && setCategoryToDelete(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Delete Category</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this category? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+            <h4 className="font-medium text-sm">Category to Delete:</h4>
+            <p className="text-sm text-muted-foreground">{categoryToDelete?.name}</p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setCategoryToDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => categoryToDelete && handleDeleteCategory(categoryToDelete)}
+              className="gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Category
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Resource Suggestion Dialog */}
+      <Dialog open={showAddResourceSuggestionDialog} onOpenChange={setShowAddResourceSuggestionDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-full bg-primary/10">
+                <Sparkles className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl">Try AI-Assisted Creation?</DialogTitle>
+                <DialogDescription className="text-base">
+                  Let AI help you add resources more efficiently
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="py-6">
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <Wand2 className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Smart Resource Detection</h4>
+                  <p className="text-sm text-muted-foreground">
+                    AI automatically extracts key information like title and description from company or tool names
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <RefreshCw className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Logo Discovery</h4>
+                  <p className="text-sm text-muted-foreground">
+                    AI will find and suggest the best logo for your resource
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <MessageSquare className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Simple Input</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Just enter a company or tool name, and AI will do the rest
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex justify-end gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => handleResourceSuggestionResponse(false)}>
+              <Edit2 className="w-4 h-4 mr-2" />
+              I'll add it manually
+            </Button>
+            <Button onClick={() => handleResourceSuggestionResponse(true)} className="gap-2">
+              <Sparkles className="w-4 h-4" />
+              Use AI Assistant
             </Button>
           </DialogFooter>
         </DialogContent>

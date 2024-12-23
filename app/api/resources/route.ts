@@ -134,14 +134,42 @@ export async function POST(request: Request) {
       })
     }
 
+    // Create resource data without created_by
+    const resourceData: {
+      title: string
+      url: string
+      description: string | null
+      category_id: number | null
+      image_url: string | null
+      tenant_id: string
+      created_by?: string
+    } = {
+      title: body.title,
+      url: body.url,
+      description: body.description || null,
+      category_id: body.category_id,
+      image_url: body.image_url,
+      tenant_id: body.tenant_id
+    }
+
+    // Check if created_by column exists
+    try {
+      const { data: hasCreatedBy } = await supabase
+        .from('resources')
+        .select('created_by')
+        .limit(1)
+      
+      if (hasCreatedBy !== null) {
+        resourceData.created_by = session.user.id
+      }
+    } catch (error) {
+      // Column doesn't exist, proceed without it
+      console.log('created_by column not found, skipping...')
+    }
+
     const { data: resource, error: resourceError } = await supabase
       .from('resources')
-      .insert([
-        {
-          ...body,
-          created_by: session.user.id,
-        },
-      ])
+      .insert([resourceData])
       .select(`
         *,
         tenant:tenants (

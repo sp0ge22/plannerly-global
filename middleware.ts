@@ -7,9 +7,25 @@ export async function middleware(req: NextRequest) {
   const supabase = createMiddlewareClient({ req, res })
   
   try {
+    // Try to refresh the session first
     const {
       data: { session },
+      error
     } = await supabase.auth.getSession()
+
+    // Handle JWT expiration or other auth errors
+    if (error?.message?.includes('JWT') || error?.message?.includes('expired')) {
+      console.error('JWT error:', error)
+      // For API routes, return 401 response
+      if (req.nextUrl.pathname.startsWith('/api/')) {
+        return NextResponse.json(
+          { error: 'Authentication expired', code: 'AUTH_EXPIRED' },
+          { status: 401 }
+        )
+      }
+      // For page routes, redirect to landing
+      return NextResponse.redirect(new URL('/', req.url))
+    }
 
     // Public routes that don't require authentication
     const publicRoutes = ['/', '/auth/callback']
@@ -20,8 +36,16 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL('/home', req.url))
     }
 
-    // If user is not logged in and trying to access protected routes, redirect to root
+    // If user is not logged in and trying to access protected routes
     if (!session && !isPublicRoute) {
+      // For API routes, return 401 response
+      if (req.nextUrl.pathname.startsWith('/api/')) {
+        return NextResponse.json(
+          { error: 'Authentication required', code: 'AUTH_REQUIRED' },
+          { status: 401 }
+        )
+      }
+      // For page routes, redirect to landing
       return NextResponse.redirect(new URL('/', req.url))
     }
 
@@ -33,14 +57,19 @@ export async function middleware(req: NextRequest) {
 
     return res
   } catch (error) {
-    // If there's any error with the session, treat user as logged out
     console.error('Session error:', error)
+    // For API routes, return 401 response
+    if (req.nextUrl.pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'Authentication error', code: 'AUTH_ERROR' },
+        { status: 401 }
+      )
+    }
+    // For page routes, redirect to landing if not on a public route
     const isPublicRoute = ['/', '/auth/callback'].includes(req.nextUrl.pathname)
-    
     if (!isPublicRoute) {
       return NextResponse.redirect(new URL('/', req.url))
     }
-    
     return res
   }
 }
@@ -48,6 +77,7 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|public).*)',
+    '/api/:path*',  // Add API routes to the matcher
     '/auth/signup',
     '/auth/verify',
     '/auth/login',
