@@ -16,6 +16,19 @@ export function Verify({ email, setMode }: VerifyProps) {
   const [isVerified, setIsVerified] = useState(false)
 
   useEffect(() => {
+    // Listen for verification complete message
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data === 'verification-complete') {
+        // Close this tab since verification is complete
+        window.close()
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
+
+  useEffect(() => {
     const checkVerification = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
@@ -60,7 +73,7 @@ export function Verify({ email, setMode }: VerifyProps) {
           We sent you a verification link to {email}. Click the link in your email to verify your account.
         </p>
         <p className="text-sm text-muted-foreground">
-          Once verified, you'll be automatically redirected to the app.
+          This tab will automatically close once you verify your email in the new tab.
         </p>
         <Button 
           variant="ghost" 
