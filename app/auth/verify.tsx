@@ -33,9 +33,9 @@ export function Verify({ email, setMode }: VerifyProps) {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         setIsVerified(true)
-        // Redirect to tasks after a short delay
+        // Redirect to settings after a short delay
         setTimeout(() => {
-          router.push('/tasks')
+          router.push('/settings')
         }, 2000)
       }
     }

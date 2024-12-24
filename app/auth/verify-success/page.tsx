@@ -20,9 +20,9 @@ export default function VerifySuccess() {
         return
       }
 
-      // Redirect to tasks after a short delay
+      // Redirect to settings after a short delay
       setTimeout(() => {
-        router.push('/tasks')
+        router.push('/settings')
       }, 2000)
 
       // Try to close the original verify tab if it exists

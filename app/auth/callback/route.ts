@@ -174,8 +174,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/auth/verify-success', request.url))
     }
 
-    // Default redirect to tasks
-    return NextResponse.redirect(new URL('/tasks', request.url))
+    // Default redirect to settings
+    return NextResponse.redirect(new URL('/settings', request.url))
   } catch (error) {
     console.error('Auth callback error:', error)
     return NextResponse.redirect(new URL('/auth/login', request.url))
