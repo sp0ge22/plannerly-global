@@ -92,6 +92,7 @@ export async function GET(request: NextRequest) {
 
     if (userTenantCheckError && userTenantCheckError.code !== 'PGRST116') {
       console.error('Error checking user tenant:', userTenantCheckError)
+      // Don't return here, continue to try creating a tenant
     }
 
     // Only create tenant and relationship if one doesn't exist
@@ -100,21 +101,39 @@ export async function GET(request: NextRequest) {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError) {
         console.error('Error getting user:', userError)
+        // Use default values if we can't get the user
       }
 
       const organizationName = user?.user_metadata?.organization_name || `${userEmail}'s Organization`
 
-      const { data: newTenant, error: tenantError } = await serviceRoleClient
-        .from('tenants')
-        .insert([{ name: organizationName }])
-        .select('id')
-        .single()
+      // Retry tenant creation up to 3 times
+      let newTenant = null;
+      let tenantError = null;
+      for (let i = 0; i < 3; i++) {
+        const result = await serviceRoleClient
+          .from('tenants')
+          .insert([{ name: organizationName }])
+          .select('id')
+          .single()
+        
+        if (!result.error) {
+          newTenant = result.data;
+          break;
+        }
+        tenantError = result.error;
+        console.error(`Attempt ${i + 1} failed to create tenant:`, tenantError)
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+      }
 
-      if (tenantError) {
-        console.error('Error creating tenant:', tenantError)
-      } else if (newTenant) {
-        // Link the user to the tenant
-        const { error: userTenantError } = await serviceRoleClient
+      if (tenantError || !newTenant) {
+        console.error('All attempts to create tenant failed:', tenantError)
+        return NextResponse.redirect(new URL('/auth/error?message=tenant_creation_failed', request.url))
+      }
+
+      // Link the user to the tenant with retry
+      let userTenantError = null;
+      for (let i = 0; i < 3; i++) {
+        const { error } = await serviceRoleClient
           .from('user_tenants')
           .insert([{
             user_id: userId,
@@ -122,12 +141,31 @@ export async function GET(request: NextRequest) {
             is_owner: true
           }])
 
-        if (userTenantError) {
-          console.error('Error linking user to tenant:', userTenantError)
-        } else {
+        if (!error) {
           console.log('Tenant created and linked successfully:', newTenant)
+          break;
         }
+        userTenantError = error;
+        console.error(`Attempt ${i + 1} failed to link user to tenant:`, userTenantError)
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
       }
+
+      if (userTenantError) {
+        console.error('All attempts to link user to tenant failed:', userTenantError)
+        return NextResponse.redirect(new URL('/auth/error?message=tenant_link_failed', request.url))
+      }
+    }
+
+    // Double-check tenant relationship before redirecting
+    const { data: finalCheck, error: finalCheckError } = await serviceRoleClient
+      .from('user_tenants')
+      .select('tenant_id')
+      .eq('user_id', userId)
+      .single()
+
+    if (!finalCheck || finalCheckError) {
+      console.error('Final tenant relationship check failed:', finalCheckError)
+      return NextResponse.redirect(new URL('/auth/error?message=tenant_verification_failed', request.url))
     }
 
     // Redirect to the home page
