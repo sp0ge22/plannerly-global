@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { Task } from '@/types/task';
 import { TaskDetailsDialog } from './TaskDetailsDialog';
 import { Button } from '@/components/ui/button';
-import { Trash2, Calendar, Clock, AlertCircle, Flag, UserCircle, Archive, ArchiveRestore, Building2 } from 'lucide-react';
+import { Trash2, Calendar, Clock, AlertCircle, Flag, UserCircle, Archive, ArchiveRestore, Building2, Shield } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useToast } from "@/hooks/use-toast";
 
 const formatDate = (dateString: string) => {
   try {
@@ -76,7 +78,7 @@ const getPriorityColor = (priority: Task['priority']) => {
 type TaskCardProps = {
   task: Task;
   updateTask: (task: Task) => void;
-  addComment: (taskId: number, comment: string) => Promise<void>; // Ensure return type is Promise<void>
+  addComment: (taskId: number, comment: string) => Promise<void>;
   deleteTask: (taskId: number, pin: string) => Promise<boolean>;
   toggleArchive: (taskId: number, archived: boolean) => Promise<void>;
 };
@@ -90,6 +92,11 @@ export function TaskCard({
 }: TaskCardProps) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [pin, setPin] = useState('');
+  const [isPinSetupOpen, setIsPinSetupOpen] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [pinError, setPinError] = useState('');
+  const supabase = createClientComponentClient();
+  const { toast } = useToast();
 
   // Add debug logging
   console.log('Task assignee data:', {
@@ -103,6 +110,113 @@ export function TaskCard({
     if (success) {
       setIsDeleteDialogOpen(false);
       setPin('');
+    }
+  };
+
+  const handlePinSetup = async () => {
+    if (!/^\d{4}$/.test(newPin)) {
+      setPinError('PIN must be exactly 4 digits');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .update({ pin: newPin })
+        .eq('id', task.tenant_id);
+
+      if (error) throw error;
+
+      toast({
+        title: "PIN set successfully",
+        description: "You can now use this PIN for organization actions.",
+      });
+
+      setIsPinSetupOpen(false);
+      setIsDeleteDialogOpen(true);
+      setPin(newPin);
+      setNewPin('');
+      setPinError('');
+    } catch (error) {
+      console.error('Error setting PIN:', error);
+      toast({
+        title: "Error setting PIN",
+        description: "There was an error setting the PIN. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const checkAndHandleDelete = async () => {
+    try {
+      // First check if user has permission to delete this task
+      const { data: userTenant, error: userError } = await supabase
+        .from('user_tenants')
+        .select('is_owner, is_admin')
+        .eq('tenant_id', task.tenant_id)
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .single();
+
+      if (userError) {
+        console.error('Error checking user permissions:', userError);
+        toast({
+          title: "Error",
+          description: "Could not verify your permissions.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Only owners and admins can delete tasks
+      if (!userTenant.is_owner && !userTenant.is_admin) {
+        toast({
+          title: "Permission denied",
+          description: "Only organization owners and admins can delete tasks.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Check if tenant has a PIN set
+      const { data: tenant, error: tenantError } = await supabase
+        .from('tenants')
+        .select('pin')
+        .eq('id', task.tenant_id)
+        .single();
+
+      if (tenantError) {
+        console.error('Error checking tenant PIN:', tenantError);
+        toast({
+          title: "Error",
+          description: "Could not verify organization settings.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Show PIN setup if PIN is null or empty string
+      if (!tenant.pin || tenant.pin.trim() === '') {
+        // If no PIN is set and user is owner, show PIN setup dialog
+        if (userTenant.is_owner) {
+          setIsPinSetupOpen(true);
+        } else {
+          toast({
+            title: "PIN Required",
+            description: "Please ask the organization owner to set up a PIN first.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // If PIN exists, show delete confirmation dialog
+        setIsDeleteDialogOpen(true);
+      }
+    } catch (error) {
+      console.error('Error checking tenant PIN:', error);
+      toast({
+        title: "Error",
+        description: "Could not verify organization settings.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -210,7 +324,7 @@ export function TaskCard({
                     size="icon"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setIsDeleteDialogOpen(true);
+                      checkAndHandleDelete();
                     }}
                     className="h-8 w-8"
                   >
@@ -222,6 +336,100 @@ export function TaskCard({
           </TaskDetailsDialog>
         </CardHeader>
       </Card>
+
+      <Dialog open={isPinSetupOpen} onOpenChange={setIsPinSetupOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={task.tenant_avatar_url ?? undefined} />
+                <AvatarFallback>
+                  {(task.tenant_name || 'Unknown').slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <DialogTitle className="text-xl">Set Organization PIN</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Set up a PIN to protect sensitive organization actions
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-muted p-4 rounded-lg space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="org-pin">Organization PIN</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="org-pin"
+                    value={newPin}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+                      setNewPin(value);
+                      setPinError('');
+                    }}
+                    placeholder="Enter 4-digit PIN"
+                    maxLength={4}
+                    pattern="[0-9]*"
+                    inputMode="numeric"
+                    className="text-lg tracking-widest"
+                  />
+                  <Button
+                    onClick={handlePinSetup}
+                    disabled={!newPin || newPin.length !== 4}
+                  >
+                    Set PIN
+                  </Button>
+                </div>
+                {pinError && (
+                  <p className="text-sm text-destructive">{pinError}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-muted p-4 rounded-lg space-y-3">
+              <h4 className="font-medium">What is the PIN used for?</h4>
+              <p className="text-sm text-muted-foreground">
+                The organization PIN is a security measure that helps protect sensitive actions within your organization. It's required when:
+              </p>
+              <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                <li>Removing members from the organization</li>
+                <li>Changing member roles (admin status)</li>
+                <li>Deleting organization resources</li>
+              </ul>
+            </div>
+            
+            <div className="bg-muted p-4 rounded-lg space-y-3">
+              <h4 className="font-medium">Who should know the PIN?</h4>
+              <p className="text-sm text-muted-foreground">
+                The PIN can be shared with trusted administrators who need to perform these actions. As the owner, you can change the PIN at any time.
+              </p>
+            </div>
+
+            <div className="bg-yellow-50 p-4 rounded-lg space-y-2">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-yellow-600" />
+                <h4 className="font-medium text-yellow-800">Security Note</h4>
+              </div>
+              <p className="text-sm text-yellow-800">
+                Keep your PIN secure and only share it with trusted administrators. You can change the PIN anytime if you suspect it has been compromised.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsPinSetupOpen(false);
+                setNewPin('');
+                setPinError('');
+              }}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">

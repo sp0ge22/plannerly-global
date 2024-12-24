@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Library, Plus, Edit2, Trash2, MessageSquare, RefreshCw, Wand2, Loader2, Sparkles, ChevronDown, Mail } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { AddPromptDialog } from '@/components/Prompts/AddPromptDialog'
 
 type EmailType = 'response' | 'rewrite'
 
@@ -354,56 +355,6 @@ export default function PromptLibraryPage() {
     }
   }
 
-  const generatePromptWithAI = async () => {
-    if (!promptDescription.trim()) {
-      toast({
-        title: "Description required",
-        description: "Please describe what kind of prompt you want to create.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsGeneratingPrompt(true)
-    try {
-      const response = await fetch('/api/generate-prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: promptDescription,
-          type: newPrompt.type
-        }),
-      })
-
-      if (!response.ok) throw new Error('Failed to generate prompt')
-
-      const data = await response.json()
-      setNewPrompt({
-        ...newPrompt,
-        title: data.title,
-        description: data.description,
-        prompt: data.prompt
-      })
-      setIsAddingPromptWithAI(false)
-      setIsAddingPrompt(true)
-      setPromptDescription('')
-
-      toast({
-        title: "Prompt generated",
-        description: "Review and edit the generated prompt before saving.",
-      })
-    } catch (error) {
-      console.error('Error generating prompt:', error)
-      toast({
-        title: "Generation failed",
-        description: "There was an error generating the prompt. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsGeneratingPrompt(false)
-    }
-  }
-
   const togglePrompt = (promptId: string) => {
     setExpandedPrompts(prev => ({
       ...prev,
@@ -412,7 +363,7 @@ export default function PromptLibraryPage() {
   }
 
   const handleAddPromptClick = () => {
-    setShowSuggestionDialog(true)
+    setIsAddingPromptWithAI(true)
   }
 
   const handleSuggestionResponse = (useAI: boolean) => {
@@ -422,6 +373,19 @@ export default function PromptLibraryPage() {
     } else {
       setIsAddingPrompt(true)
     }
+  }
+
+  const handlePromptGenerated = (generatedPrompt: {
+    title: string
+    description: string | null
+    prompt: string
+  }) => {
+    setNewPrompt({
+      ...newPrompt,
+      ...generatedPrompt
+    })
+    setIsAddingPrompt(true)
+    setIsAddingPromptWithAI(false)
   }
 
   return (
@@ -698,6 +662,14 @@ export default function PromptLibraryPage() {
         </div>
       </main>
 
+      <AddPromptDialog
+        isOpen={isAddingPromptWithAI}
+        onClose={() => setIsAddingPromptWithAI(false)}
+        onPromptGenerated={handlePromptGenerated}
+        type={selectedType}
+        skipSuggestion={true}
+      />
+
       <Dialog open={isAddingPrompt || isEditingPrompt} onOpenChange={(open) => {
         if (!open) {
           setIsAddingPrompt(false)
@@ -858,53 +830,6 @@ export default function PromptLibraryPage() {
                 <>
                   <Wand2 className="w-4 h-4 mr-2" />
                   Edit with AI
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isAddingPromptWithAI} onOpenChange={setIsAddingPromptWithAI}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Create Prompt with AI</DialogTitle>
-            <DialogDescription>
-              Describe what kind of prompt you want to create, and AI will help you generate it.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="prompt-description">What kind of prompt do you want to create?</Label>
-              <Textarea
-                id="prompt-description"
-                value={promptDescription}
-                onChange={(e) => setPromptDescription(e.target.value)}
-                placeholder="Example: I want a prompt that helps me write polite rejection emails to vendors..."
-                className="min-h-[100px]"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsAddingPromptWithAI(false)
-              setPromptDescription('')
-            }}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={generatePromptWithAI}
-              disabled={isGeneratingPrompt || !promptDescription.trim()}
-            >
-              {isGeneratingPrompt ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Generate Prompt
                 </>
               )}
             </Button>

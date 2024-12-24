@@ -414,7 +414,12 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
               </div>
               <div className="flex items-center space-x-6 text-sm text-gray-600">
                 <div className="flex items-center space-x-2">
-                  <UserCircle className="w-4 h-4" />
+                  <Avatar className="h-5 w-5">
+                    <AvatarImage src={task.assignee_avatar_url ?? undefined} />
+                    <AvatarFallback>
+                      {task.assignee.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
                   <span>{task.assignee}</span>
                 </div>
                 <div className="flex items-center space-x-4">

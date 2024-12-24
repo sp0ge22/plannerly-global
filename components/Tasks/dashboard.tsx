@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Search, Loader2, Filter, RefreshCcw, Calendar, Archive, ArchiveRestore, Crown, Shield, User, Edit2, Sparkles } from 'lucide-react'
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { sortTasks } from './TaskGrid' // Ensure this import is correct
+import { sortTasks } from './TaskGrid'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { ArchivedTaskCard } from './ArchivedTaskCard'
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -100,6 +100,9 @@ export function DashboardComponent() {
 
   const updateTask = async (updatedTask: Task) => {
     try {
+      console.log('Starting task update with:', updatedTask)
+      
+      // First update the task
       const response = await fetch(`/api/tasks/${updatedTask.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -109,14 +112,51 @@ export function DashboardComponent() {
       if (!response.ok) throw new Error('Failed to update task')
 
       const updatedTaskData = await response.json()
-      setTasks(prev => prev.map(task => 
-        task.id === updatedTaskData.id ? updatedTaskData : task
-      ))
+      console.log('Received updated task data:', updatedTaskData)
+
+      // Get the assignee's profile data directly from profiles table
+      const { data: assigneeProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url')
+        .or(`email.eq."${updatedTaskData.assignee}",name.eq."${updatedTaskData.assignee}"`)
+        .single()
+
+      console.log('Found assignee profile:', assigneeProfile)
+      console.log('Profile error if any:', profileError)
+
+      if (profileError) {
+        console.error('Error fetching assignee profile:', profileError)
+      }
+
+      // Ensure we preserve all metadata when updating the task
+      const taskWithMetadata = {
+        ...updatedTaskData,
+        tenant_name: updatedTaskData.tenant_name || updatedTaskData.tenant?.name,
+        tenant_avatar_url: updatedTaskData.tenant_avatar_url || updatedTaskData.tenant?.avatar_url,
+        assignee: updatedTaskData.assignee,
+        assignee_id: assigneeProfile?.id || updatedTaskData.assignee_id,
+        // Use the fetched profile avatar URL or fall back to existing one
+        assignee_avatar_url: assigneeProfile?.avatar_url || updatedTaskData.assignee_avatar_url,
+        comments: updatedTaskData.comments || []
+      }
+
+      console.log('Final task with metadata:', taskWithMetadata)
+
+      setTasks(prev => {
+        const newTasks = prev.map(task => 
+          task.id === taskWithMetadata.id ? taskWithMetadata : task
+        )
+        console.log('New tasks state:', newTasks)
+        return newTasks
+      })
       
       toast({
         title: "Task updated",
         description: "Your changes have been saved.",
       })
+
+      // Refresh tasks to ensure we have the latest data
+      await fetchTasks()
     } catch (error) {
       console.error('Error updating task:', error)
       toast({

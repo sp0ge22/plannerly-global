@@ -6,8 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { motion } from 'framer-motion'
-import { Plus, Wand2, Loader2, Edit2, Building2, AlertCircle, ListTodo, X } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Plus, Wand2, Loader2, Edit2, Building2, AlertCircle, ListTodo, X, Check } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { Task } from '@/types/task'
 import { Calendar as CalendarIcon } from "lucide-react"
@@ -19,6 +19,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Crown, Shield, User } from "lucide-react"
 import { Sparkles } from "lucide-react"
 import { useRouter } from 'next/navigation'
+import { LoadAndErrorButton } from '@/components/ui/loadbutton'
 
 type Tenant = {
   id: string
@@ -80,6 +81,7 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
   const [missingFields, setMissingFields] = useState<string[]>([])
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
   const [showSuggestionDialog, setShowSuggestionDialog] = useState(false)
+  const [buttonVariant, setButtonVariant] = useState<"neutral" | "loading" | "error" | "success">("neutral")
 
   useEffect(() => {
     if (isOpen || isAddingTaskWithAI) {
@@ -337,7 +339,7 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
       return
     }
 
-    setIsGeneratingTask(true)
+    setButtonVariant("loading")
     try {
       const response = await fetch('/api/generate-task', {
         method: 'POST',
@@ -382,23 +384,33 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
       
       setNewTask(generatedTask)
       setMissingFields(data.missing_fields || [])
-      setIsAddingTaskWithAI(false)
       setTaskDescription('')
-      // Open the main task dialog with pre-filled data
-      setIsOpen(true)
+      setButtonVariant("success")
 
-      if (data.missing_fields?.length > 0) {
-        toast({
-          title: "Some fields need your input",
-          description: `Please fill in: ${data.missing_fields.join(', ')}`,
-          variant: "default",
-        })
-      } else {
-        toast({
-          title: "Task generated",
-          description: "Review and edit the generated task before saving.",
-        })
-      }
+      // Add delay before opening dialog
+      setTimeout(() => {
+        // Close AI dialog and open main dialog
+        setIsAddingTaskWithAI(false)
+        setIsOpen(true)
+
+        if (data.missing_fields?.length > 0) {
+          toast({
+            title: "Some fields need your input",
+            description: `Please fill in: ${data.missing_fields.join(', ')}`,
+            variant: "default",
+          })
+        } else {
+          toast({
+            title: "Task generated",
+            description: "Review and edit the generated task before saving.",
+          })
+        }
+
+        // Reset button after showing success
+        setTimeout(() => {
+          setButtonVariant("neutral")
+        }, 1000)
+      }, 1000) // 1 second delay before opening dialog
     } catch (error) {
       console.error('Error generating task:', error)
       toast({
@@ -406,8 +418,10 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
         description: "There was an error generating the task. Please try again.",
         variant: "destructive",
       })
-    } finally {
-      setIsGeneratingTask(false)
+      setButtonVariant("error")
+      setTimeout(() => {
+        setButtonVariant("neutral")
+      }, 1000)
     }
   }
 
@@ -1021,23 +1035,13 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
               <X className="w-4 h-4" />
               Cancel
             </Button>
-            <Button 
+            <LoadAndErrorButton
               onClick={generateTaskWithAI}
-              disabled={isGeneratingTask || !taskDescription.trim() || !newTask.tenant_id}
-              className="gap-2"
-            >
-              {isGeneratingTask ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="w-4 h-4" />
-                  Generate Task
-                </>
-              )}
-            </Button>
+              disabled={!taskDescription.trim() || !newTask.tenant_id}
+              variant={buttonVariant}
+              text="Generate Task"
+              icon={<Sparkles className="w-4 h-4" />}
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>

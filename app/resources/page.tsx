@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Plus, Folder, Link2, Search, Trash2, Pencil, Library, Sparkles, RefreshCw, Wand2, MessageSquare, Edit2, Crown, Shield, User } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { LoadAndErrorButton } from '@/components/ui/loadbutton'
 
 
 interface Resource {
@@ -422,11 +423,12 @@ export default function ResourcesPage() {
   } | null>(null)
   const [isLoadingAI, setIsLoadingAI] = useState(false)
   const [resourceUrl, setResourceUrl] = useState('')
+  const [buttonVariant, setButtonVariant] = useState<"neutral" | "loading" | "error" | "success">("neutral")
 
   const handleAddWithAI = async () => {
     if (!resourceUrl) return
 
-    setIsLoadingAI(true)
+    setButtonVariant("loading")
     try {
       const response = await fetch('/api/resources/suggest', {
         method: 'POST',
@@ -438,6 +440,10 @@ export default function ResourcesPage() {
 
       const suggestion = await response.json()
       setAiResourceSuggestion(suggestion)
+      setButtonVariant("success")
+      setTimeout(() => {
+        setButtonVariant("neutral")
+      }, 1000)
     } catch (error) {
       console.error('Error getting AI suggestion:', error)
       toast({
@@ -445,8 +451,10 @@ export default function ResourcesPage() {
         description: "There was an error analyzing the resource. Please try again.",
         variant: "destructive",
       })
-    } finally {
-      setIsLoadingAI(false)
+      setButtonVariant("error")
+      setTimeout(() => {
+        setButtonVariant("neutral")
+      }, 1000)
     }
   }
 
@@ -1415,18 +1423,13 @@ export default function ResourcesPage() {
                       onChange={(e) => setResourceUrl(e.target.value)}
                       className="h-11"
                     />
-                    <Button 
-                      onClick={handleAddWithAI} 
-                      disabled={isLoadingAI || !resourceUrl || !newResource.tenant_id}
-                      className="h-11 px-6"
-                    >
-                      {isLoadingAI ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-4 h-4" />
-                      )}
-                      <span className="ml-2">Analyze</span>
-                    </Button>
+                    <LoadAndErrorButton
+                      onClick={handleAddWithAI}
+                      disabled={!resourceUrl || !newResource.tenant_id}
+                      variant={buttonVariant}
+                      text="Analyze"
+                      icon={<Sparkles className="w-4 h-4" />}
+                    />
                   </div>
                 </div>
               </div>
