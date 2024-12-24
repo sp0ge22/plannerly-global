@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Crown, User, Pencil, Shield, Trash2, UserMinus, ImageIcon, InfoIcon } from 'lucide-react'
+import { Loader2, Crown, User, Pencil, Shield, Trash2, UserMinus, ImageIcon, InfoIcon, Building2 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from 'next/navigation'
 import { PostgrestError } from '@supabase/supabase-js'
@@ -101,6 +101,12 @@ export default function SettingsPage() {
     memberName: string;
   } | null>(null);
   const [showPinInfoDialog, setShowPinInfoDialog] = useState(false)
+  const [leaveOrgDialog, setLeaveOrgDialog] = useState<{
+    isOpen: boolean;
+    orgId: string;
+    orgName: string;
+  } | null>(null);
+  const [confirmOrgName, setConfirmOrgName] = useState('');
 
   useEffect(() => {
     const fetchTenants = async () => {
@@ -661,6 +667,48 @@ export default function SettingsPage() {
     }
   }
 
+  const handleLeaveOrg = async () => {
+    if (!leaveOrgDialog || confirmOrgName !== leaveOrgDialog.orgName) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('user_tenants')
+        .delete()
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', leaveOrgDialog.orgId);
+
+      if (error) throw error;
+
+      // Update local state
+      setOrganizations(orgs => orgs.filter(org => org.id !== leaveOrgDialog.orgId));
+      setLeaveOrgDialog(null);
+      setConfirmOrgName('');
+
+      toast({
+        title: "Organization left",
+        description: `You have left ${leaveOrgDialog.orgName}`,
+      });
+
+      // If we were viewing the org we just left, reset selection
+      if (selectedOrgId === leaveOrgDialog.orgId) {
+        setSelectedOrgId(null);
+      }
+
+      // Refresh the page
+      router.refresh();
+    } catch (error) {
+      console.error('Error leaving organization:', error);
+      toast({
+        title: "Error leaving organization",
+        description: "There was an error leaving the organization. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-neutral-50">
       <main className="flex-1 p-6">
@@ -859,13 +907,33 @@ export default function SettingsPage() {
                                   </div>
                                 </div>
                               </div>
-                              <Button
-                                variant={selectedOrgId === org.id ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setSelectedOrgId(org.id)}
-                              >
-                                {selectedOrgId === org.id ? 'Selected' : 'Select'}
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                {!org.is_owner && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setLeaveOrgDialog({
+                                        isOpen: true,
+                                        orgId: org.id,
+                                        orgName: org.name
+                                      });
+                                    }}
+                                    className="gap-2 text-destructive hover:text-destructive"
+                                  >
+                                    <UserMinus className="w-4 h-4" />
+                                    Leave
+                                  </Button>
+                                )}
+                                <Button
+                                  variant={selectedOrgId === org.id ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => setSelectedOrgId(org.id)}
+                                >
+                                  {selectedOrgId === org.id ? 'Selected' : 'Select'}
+                                </Button>
+                              </div>
                             </div>
                             
                             {org.is_owner && (
@@ -1426,6 +1494,83 @@ export default function SettingsPage() {
                     }}
                   >
                     Close
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Add Leave Organization Dialog */}
+            <Dialog 
+              open={leaveOrgDialog?.isOpen} 
+              onOpenChange={(open) => {
+                if (!open) {
+                  setLeaveOrgDialog(null);
+                  setConfirmOrgName('');
+                }
+              }}
+            >
+              <DialogContent className="sm:max-w-[400px]">
+                <DialogHeader>
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-16 w-16">
+                      <AvatarImage src={organizations.find(org => org.id === leaveOrgDialog?.orgId)?.avatar_url ?? undefined} />
+                      <AvatarFallback>
+                        {leaveOrgDialog?.orgName.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <DialogTitle className="text-xl">Leave Organization</DialogTitle>
+                      <DialogDescription className="mt-1">
+                        This action cannot be undone
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+                <div className="mt-6">
+                  <div className="space-y-4">
+                    <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                      <h4 className="font-medium text-sm">Organization to Leave:</h4>
+                      <p className="text-sm text-muted-foreground">{leaveOrgDialog?.orgName}</p>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Building2 className="w-4 h-4" />
+                        <span>You will lose access to all organization resources</span>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <Label htmlFor="confirm-name" className="text-sm font-medium">
+                        Type organization name to confirm
+                      </Label>
+                      <Input
+                        id="confirm-name"
+                        value={confirmOrgName}
+                        onChange={(e) => setConfirmOrgName(e.target.value)}
+                        placeholder={leaveOrgDialog?.orgName}
+                        className="text-base"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Please type <span className="font-medium">{leaveOrgDialog?.orgName}</span> to confirm
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter className="mt-6 gap-2 sm:gap-0">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setLeaveOrgDialog(null);
+                      setConfirmOrgName('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleLeaveOrg}
+                    disabled={!confirmOrgName || confirmOrgName !== leaveOrgDialog?.orgName}
+                    className="gap-2"
+                  >
+                    <UserMinus className="w-4 h-4" />
+                    Leave Organization
                   </Button>
                 </DialogFooter>
               </DialogContent>

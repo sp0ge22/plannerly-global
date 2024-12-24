@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { motion } from 'framer-motion'
-import { Plus, Wand2, Loader2, Edit2 } from 'lucide-react'
+import { Plus, Wand2, Loader2, Edit2, Building2, AlertCircle, ListTodo, X } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { Task } from '@/types/task'
 import { Calendar as CalendarIcon } from "lucide-react"
@@ -831,7 +831,7 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
                 <div className="flex-1">
                   <h4 className="font-medium mb-1">Smart Assignment</h4>
                   <p className="text-sm text-muted-foreground">
-                    Automatically identifies and assigns tasks to team members mentioned in your description
+                    Automatically matches and assigns tasks to existing organization members mentioned in your description
                   </p>
                 </div>
               </div>
@@ -868,16 +868,23 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
       </Dialog>
 
       <Dialog open={isAddingTaskWithAI} onOpenChange={setIsAddingTaskWithAI}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Create Task with AI</DialogTitle>
-            <DialogDescription>
-              Describe the task you want to create, and AI will help you generate it.
+            <DialogTitle className="text-2xl">Create Task with AI</DialogTitle>
+            <DialogDescription className="text-base mt-2">
+              Describe your task naturally, and our AI will structure it for you.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="ai-tenant-select" className="text-sm font-medium">Organization</Label>
+          
+          <div className="grid gap-6 py-6">
+            {/* Organization Selection */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-full bg-primary/10">
+                  <Building2 className="w-4 h-4 text-primary" />
+                </div>
+                <Label htmlFor="ai-tenant-select" className="text-base font-medium">Select Organization</Label>
+              </div>
               <Select
                 value={newTask.tenant_id}
                 onValueChange={(value) => setNewTask({ ...newTask, tenant_id: value })}
@@ -960,36 +967,73 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="task-description">What task do you want to create?</Label>
+
+            {/* Task Description */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-full bg-primary/10">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                </div>
+                <Label htmlFor="task-description" className="text-base font-medium">Describe Your Task</Label>
+              </div>
+              
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <h4 className="font-medium text-sm">Include the following in your description:</h4>
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <User className="w-4 h-4 text-primary" />
+                    <span>Assignee (use their name/email as shown in your organization)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <AlertCircle className="w-4 h-4 text-primary" />
+                    <span>Priority level (high, medium, or low)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <CalendarIcon className="w-4 h-4 text-primary" />
+                    <span>Due date (if needed)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <ListTodo className="w-4 h-4 text-primary" />
+                    <span>Task details and requirements</span>
+                  </div>
+                </div>
+              </div>
+
               <Textarea
                 id="task-description"
                 value={taskDescription}
                 onChange={(e) => setTaskDescription(e.target.value)}
-                placeholder="Example: Create a high-priority task for John to review the Q4 budget report by next Friday..."
-                className="min-h-[100px]"
+                placeholder="Example: Create a high-priority task for sarah@company.com to review the Q4 budget report. It should include analyzing revenue trends and preparing a summary presentation. This needs to be done by next Friday."
+                className="min-h-[120px] text-base"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsAddingTaskWithAI(false)
-              setTaskDescription('')
-            }}>
+
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsAddingTaskWithAI(false)
+                setTaskDescription('')
+              }}
+              className="gap-2"
+            >
+              <X className="w-4 h-4" />
               Cancel
             </Button>
             <Button 
               onClick={generateTaskWithAI}
               disabled={isGeneratingTask || !taskDescription.trim() || !newTask.tenant_id}
+              className="gap-2"
             >
               {isGeneratingTask ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   Generating...
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4 mr-2" />
+                  <Wand2 className="w-4 h-4" />
                   Generate Task
                 </>
               )}
