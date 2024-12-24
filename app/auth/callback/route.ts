@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
   try {
     const requestUrl = new URL(request.url)
     const code = requestUrl.searchParams.get('code')
+    const redirect = requestUrl.searchParams.get('redirect')
 
     if (!code) {
       return NextResponse.redirect(new URL('/auth/login', request.url))
@@ -168,7 +169,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/auth/error?message=tenant_verification_failed', request.url))
     }
 
-    // Redirect to the home page
+    // Modify the final redirect based on the redirect parameter
+    if (redirect === 'verify') {
+      return NextResponse.redirect(new URL('/auth/verify-success', request.url))
+    }
+
+    // Default redirect to tasks
     return NextResponse.redirect(new URL('/tasks', request.url))
   } catch (error) {
     console.error('Auth callback error:', error)

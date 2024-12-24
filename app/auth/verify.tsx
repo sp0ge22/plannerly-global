@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Loader2 } from 'lucide-react'
-import { useEffect } from 'react'
+import { Loader2, CheckCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
 
@@ -13,16 +13,16 @@ interface VerifyProps {
 export function Verify({ email, setMode }: VerifyProps) {
   const router = useRouter()
   const supabase = createClientComponentClient()
+  const [isVerified, setIsVerified] = useState(false)
 
   useEffect(() => {
     const checkVerification = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
-        // If we have a session, the user is verified
-        router.push('/tasks')
-        // Close this tab after a short delay
+        setIsVerified(true)
+        // Redirect to tasks after a short delay
         setTimeout(() => {
-          window.close()
+          router.push('/tasks')
         }, 2000)
       }
     }
@@ -37,6 +37,20 @@ export function Verify({ email, setMode }: VerifyProps) {
     return () => clearInterval(interval)
   }, [router, supabase.auth])
 
+  if (isVerified) {
+    return (
+      <Card className="w-full max-w-md">
+        <CardContent className="pt-6 text-center space-y-4">
+          <CheckCircle className="h-8 w-8 mx-auto text-green-500" />
+          <h2 className="text-2xl font-bold">Email Verified!</h2>
+          <p className="text-muted-foreground max-w-sm mx-auto">
+            Your email has been verified successfully. Redirecting you to the app...
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card className="w-full max-w-md">
       <CardContent className="pt-6 text-center space-y-4">
@@ -46,7 +60,7 @@ export function Verify({ email, setMode }: VerifyProps) {
           We sent you a verification link to {email}. Click the link in your email to verify your account.
         </p>
         <p className="text-sm text-muted-foreground">
-          This page will automatically close once you're verified.
+          Once verified, you'll be automatically redirected to the app.
         </p>
         <Button 
           variant="ghost" 
