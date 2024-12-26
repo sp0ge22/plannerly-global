@@ -25,33 +25,50 @@ const serviceRoleClient = createClient(
   }
 )
 
+// Add a logging function that will show in Vercel
+const log = (message: string, data?: any) => {
+  const timestamp = new Date().toISOString()
+  const logData = data ? `\nData: ${JSON.stringify(data, null, 2)}` : ''
+  console.log(`[${timestamp}] ${message}${logData}`)
+  
+  // Also log to Vercel's system logs
+  if (process.env.VERCEL) {
+    // @ts-ignore
+    process.stdout.write(`[${timestamp}] ${message}${logData}\n`)
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const requestUrl = new URL(request.url)
     const code = requestUrl.searchParams.get('code')
 
     if (!code) {
+      log('No code provided in callback')
       return NextResponse.redirect(new URL('/auth/login', request.url))
     }
+
+    log('Starting auth callback process', { code: code.substring(0, 8) + '...' })
 
     const supabase = createRouteHandlerClient({ cookies })
     
     // Exchange the code for a session
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
     if (exchangeError) {
-      console.error('Error exchanging code for session:', exchangeError)
+      log('Error exchanging code for session', { error: exchangeError })
       return NextResponse.redirect(new URL('/auth/login', request.url))
     }
 
     // Get the user's session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     if (sessionError || !session?.user) {
-      console.error('No session or user found:', sessionError)
+      log('Session error or no user found', { error: sessionError })
       return NextResponse.redirect(new URL('/auth/login', request.url))
     }
 
     const userId = session.user.id
     const userEmail = session.user.email
+    log('User authenticated successfully', { userId, userEmail })
 
     // Ensure profile exists
     const { data: existingProfile, error: profileSelectError } = await supabase
@@ -60,12 +77,18 @@ export async function GET(request: NextRequest) {
       .eq('id', userId)
       .single()
 
+    log('Checking for existing profile', { 
+      hasProfile: !!existingProfile,
+      error: profileSelectError 
+    })
+
     if (profileSelectError && profileSelectError.code !== 'PGRST116') {
       // PGRST116 means no rows found. If it's another error, log it.
-      console.error('Error selecting profile:', profileSelectError)
+      log('Error checking for profile', { error: profileSelectError })
     }
 
     if (!existingProfile) {
+      log('Creating new profile', { userId, userEmail })
       const { error: profileInsertError } = await supabase
         .from('profiles')
         .insert([{
@@ -78,9 +101,10 @@ export async function GET(request: NextRequest) {
         }])
 
       if (profileInsertError) {
-        console.error('Error creating profile:', profileInsertError)
+        log('Error creating profile', { error: profileInsertError })
         return NextResponse.redirect(new URL('/auth/login', request.url))
       }
+      log('Profile created successfully')
     }
 
     // Check if user already has a tenant relationship
@@ -90,29 +114,29 @@ export async function GET(request: NextRequest) {
       .eq('user_id', userId)
       .single()
 
-    console.log('Checking existing tenant:', { 
+    log('Checked existing tenant relationship', { 
       existingUserTenant, 
-      userTenantCheckError,
+      error: userTenantCheckError,
       userId 
     })
 
     if (userTenantCheckError && userTenantCheckError.code !== 'PGRST116') {
-      console.error('Error checking user tenant:', userTenantCheckError)
+      log('Error checking user tenant', { error: userTenantCheckError })
     }
 
     // Only create tenant and relationship if one doesn't exist
     if (!existingUserTenant) {
-      console.log('No existing tenant found, creating new tenant...')
+      log('No existing tenant found, starting tenant creation')
       
       // Get the organization name from user metadata if it exists
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError) {
-        console.error('Error getting user for tenant creation:', userError)
+        log('Error getting user for tenant creation', { error: userError })
         return NextResponse.redirect(new URL('/auth/login', request.url))
       }
 
       const organizationName = user?.user_metadata?.organization_name || `${userEmail}'s Organization`
-      console.log('Creating tenant with name:', organizationName)
+      log('Creating new tenant', { organizationName })
 
       // Create new tenant
       const { data: newTenant, error: tenantError } = await serviceRoleClient
@@ -121,19 +145,23 @@ export async function GET(request: NextRequest) {
         .select('id')
         .single()
 
-      console.log('Tenant creation result:', { newTenant, tenantError })
+      log('Tenant creation completed', { 
+        success: !!newTenant,
+        error: tenantError,
+        tenantId: newTenant?.id 
+      })
 
       if (tenantError) {
-        console.error('Error creating tenant:', tenantError)
+        log('Failed to create tenant', { error: tenantError })
         return NextResponse.redirect(new URL('/auth/login', request.url))
       }
 
       if (!newTenant) {
-        console.error('No tenant created - unexpected state')
+        log('No tenant created - unexpected state')
         return NextResponse.redirect(new URL('/auth/login', request.url))
       }
 
-      console.log('Creating user-tenant relationship:', {
+      log('Creating user-tenant relationship', {
         userId,
         tenantId: newTenant.id
       })
@@ -147,13 +175,18 @@ export async function GET(request: NextRequest) {
           is_owner: true
         }])
 
-      console.log('User-tenant relationship creation result:', { userTenantError })
+      if (userTenantError) {
+        log('Failed to create user-tenant relationship', { error: userTenantError })
+        return NextResponse.redirect(new URL('/auth/login', request.url))
+      }
+
+      log('User-tenant relationship created successfully')
     }
 
-    // Redirect to the home page
+    log('Auth callback completed successfully, redirecting to tasks')
     return NextResponse.redirect(new URL('/tasks', request.url))
   } catch (error) {
-    console.error('Auth callback error:', error)
+    log('Unhandled error in auth callback', { error })
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 }
