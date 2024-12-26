@@ -25,15 +25,17 @@ const serviceRoleClient = createClient(
   }
 )
 
+// Define type for loggable data
+type LoggableData = Record<string, unknown>
+
 // Add a logging function that will show in Vercel
-const log = (message: string, data?: any) => {
+const log = (message: string, data?: LoggableData) => {
   const timestamp = new Date().toISOString()
   const logData = data ? `\nData: ${JSON.stringify(data, null, 2)}` : ''
   console.log(`[${timestamp}] ${message}${logData}`)
   
   // Also log to Vercel's system logs
   if (process.env.VERCEL) {
-    // @ts-ignore
     process.stdout.write(`[${timestamp}] ${message}${logData}\n`)
   }
 }
