@@ -90,44 +90,64 @@ export async function GET(request: NextRequest) {
       .eq('user_id', userId)
       .single()
 
+    console.log('Checking existing tenant:', { 
+      existingUserTenant, 
+      userTenantCheckError,
+      userId 
+    })
+
     if (userTenantCheckError && userTenantCheckError.code !== 'PGRST116') {
       console.error('Error checking user tenant:', userTenantCheckError)
     }
 
     // Only create tenant and relationship if one doesn't exist
     if (!existingUserTenant) {
+      console.log('No existing tenant found, creating new tenant...')
+      
       // Get the organization name from user metadata if it exists
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError) {
-        console.error('Error getting user:', userError)
+        console.error('Error getting user for tenant creation:', userError)
+        return NextResponse.redirect(new URL('/auth/login', request.url))
       }
 
       const organizationName = user?.user_metadata?.organization_name || `${userEmail}'s Organization`
+      console.log('Creating tenant with name:', organizationName)
 
+      // Create new tenant
       const { data: newTenant, error: tenantError } = await serviceRoleClient
         .from('tenants')
         .insert([{ name: organizationName }])
         .select('id')
         .single()
 
+      console.log('Tenant creation result:', { newTenant, tenantError })
+
       if (tenantError) {
         console.error('Error creating tenant:', tenantError)
-      } else if (newTenant) {
-        // Link the user to the tenant
-        const { error: userTenantError } = await serviceRoleClient
-          .from('user_tenants')
-          .insert([{
-            user_id: userId,
-            tenant_id: newTenant.id,
-            is_owner: true
-          }])
-
-        if (userTenantError) {
-          console.error('Error linking user to tenant:', userTenantError)
-        } else {
-          console.log('Tenant created and linked successfully:', newTenant)
-        }
+        return NextResponse.redirect(new URL('/auth/login', request.url))
       }
+
+      if (!newTenant) {
+        console.error('No tenant created - unexpected state')
+        return NextResponse.redirect(new URL('/auth/login', request.url))
+      }
+
+      console.log('Creating user-tenant relationship:', {
+        userId,
+        tenantId: newTenant.id
+      })
+
+      // Link the user to the tenant
+      const { error: userTenantError } = await serviceRoleClient
+        .from('user_tenants')
+        .insert([{
+          user_id: userId,
+          tenant_id: newTenant.id,
+          is_owner: true
+        }])
+
+      console.log('User-tenant relationship creation result:', { userTenantError })
     }
 
     // Redirect to the home page
