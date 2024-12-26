@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
@@ -5,6 +6,20 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { NextRequest } from 'next/server'
+
+// Define type for loggable data
+type LoggableData = Record<string, unknown>
+
+// Add a logging function that will show in Vercel Edge Runtime
+const log = (message: string, data?: LoggableData) => {
+  const timestamp = new Date().toISOString()
+  const logMessage = {
+    timestamp,
+    message,
+    ...data
+  }
+  console.log(JSON.stringify(logMessage))
+}
 
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
   throw new Error('Missing env.NEXT_PUBLIC_SUPABASE_URL')
@@ -24,21 +39,6 @@ const serviceRoleClient = createClient(
     }
   }
 )
-
-// Define type for loggable data
-type LoggableData = Record<string, unknown>
-
-// Add a logging function that will show in Vercel
-const log = (message: string, data?: LoggableData) => {
-  const timestamp = new Date().toISOString()
-  const logData = data ? `\nData: ${JSON.stringify(data, null, 2)}` : ''
-  console.log(`[${timestamp}] ${message}${logData}`)
-  
-  // Also log to Vercel's system logs
-  if (process.env.VERCEL) {
-    process.stdout.write(`[${timestamp}] ${message}${logData}\n`)
-  }
-}
 
 export async function GET(request: NextRequest) {
   try {
