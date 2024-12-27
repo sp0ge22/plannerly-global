@@ -181,8 +181,7 @@ export async function GET(request: NextRequest) {
     
     if (redirect === 'verify') {
       log('Email verification callback, redirecting to success page')
-      const redirectUrl = next || '/settings'
-      return NextResponse.redirect(new URL(redirectUrl, request.url))
+      return NextResponse.redirect(new URL('/auth/verify-success', request.url))
     }
 
     log('Auth callback completed successfully, redirecting to settings')
