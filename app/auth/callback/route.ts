@@ -25,11 +25,13 @@ export async function GET(request: NextRequest) {
     const requestUrl = new URL(request.url)
     const code = requestUrl.searchParams.get('code')
     const redirect = requestUrl.searchParams.get('redirect')
+    const type = requestUrl.searchParams.get('type')
 
     log('Callback received request', { 
       url: request.url,
       code: code ? code.substring(0, 8) + '...' : 'none',
       redirect,
+      type,
       allParams: Object.fromEntries(requestUrl.searchParams)
     })
 
@@ -38,169 +40,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/auth/login', request.url))
     }
 
-    // Check if this is an email verification callback first
-    if (redirect === 'verify') {
-      log('Email verification callback detected, redirecting to success page')
-      
-      // Exchange the code for a session first
-      const supabase = createRouteHandlerClient({ cookies })
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-      
-      if (exchangeError) {
-        log('Error exchanging code in verify flow', { error: exchangeError })
-        return NextResponse.redirect(new URL('/auth/error', request.url))
-      }
-
-      log('Successfully exchanged code, redirecting to verify-success')
-      return NextResponse.redirect(new URL('/auth/verify-success', request.url))
-    }
-
-    log('Starting auth callback process', { code: code.substring(0, 8) + '...' })
-
     const supabase = createRouteHandlerClient({ cookies })
     
-    // Exchange the code for a session
+    // Exchange the code for a session first
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
     if (exchangeError) {
       log('Error exchanging code for session', { error: exchangeError })
-      return NextResponse.redirect(new URL('/auth/login', request.url))
+      return NextResponse.redirect(new URL('/auth/error', request.url))
     }
 
-    // Get the user's session
+    // Get the session to check if this was a signup verification
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     if (sessionError || !session?.user) {
       log('Session error or no user found', { error: sessionError })
       return NextResponse.redirect(new URL('/auth/login', request.url))
     }
 
-    const userId = session.user.id
-    const userEmail = session.user.email
-    log('User authenticated successfully', { userId, userEmail })
-
-    // Ensure profile exists
-    const { data: existingProfile, error: profileSelectError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-
-    log('Checking for existing profile', { 
-      hasProfile: !!existingProfile,
-      error: profileSelectError 
-    })
-
-    if (profileSelectError && profileSelectError.code !== 'PGRST116') {
-      log('Error checking for profile', { error: profileSelectError })
+    // If this was a signup verification or has the verify redirect, show success page
+    if (type === 'signup' || redirect === 'verify') {
+      log('Signup verification detected, redirecting to success page')
+      return NextResponse.redirect(new URL('/auth/verify-success', request.url))
     }
 
-    if (!existingProfile) {
-      log('Creating new profile', { userId, userEmail })
-      const { error: profileInsertError } = await supabase
-        .from('profiles')
-        .insert([{
-          id: userId,
-          email: userEmail,
-          avatar_color: 'bg-red-600',
-          avatar_letter: 'U',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }])
-
-      if (profileInsertError) {
-        log('Error creating profile', { error: profileInsertError })
-        return NextResponse.redirect(new URL('/auth/login', request.url))
-      }
-      log('Profile created successfully')
-    }
-
-    // Check if user already has a tenant relationship
-    const { data: existingUserTenant, error: userTenantCheckError } = await supabase
-      .from('user_tenants')
-      .select('tenant_id')
-      .eq('user_id', userId)
-      .single()
-
-    log('Checked existing tenant relationship', { 
-      existingUserTenant, 
-      error: userTenantCheckError,
-      userId 
-    })
-
-    if (userTenantCheckError && userTenantCheckError.code !== 'PGRST116') {
-      log('Error checking user tenant', { error: userTenantCheckError })
-    }
-
-    // Only create tenant and relationship if one doesn't exist
-    if (!existingUserTenant) {
-      log('No existing tenant found, starting tenant creation')
-      
-      // Get the organization name from user metadata if it exists
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError) {
-        log('Error getting user for tenant creation', { error: userError })
-        return NextResponse.redirect(new URL('/auth/login', request.url))
-      }
-
-      const organizationName = user?.user_metadata?.organization_name || `${userEmail}'s Organization`
-      log('Creating new tenant', { organizationName })
-
-      // Create new tenant using regular supabase client
-      const { data: newTenant, error: tenantError } = await supabase
-        .from('tenants')
-        .insert([{ name: organizationName }])
-        .select('id')
-        .single()
-
-      if (tenantError) {
-        log('Failed to create tenant', { error: tenantError })
-        return NextResponse.redirect(new URL('/auth/error?code=tenant_creation_failed', request.url))
-      }
-
-      if (!newTenant) {
-        log('No tenant created - unexpected state')
-        return NextResponse.redirect(new URL('/auth/error?code=tenant_missing', request.url))
-      }
-
-      log('Creating user-tenant relationship', {
-        userId,
-        tenantId: newTenant.id
-      })
-
-      // Link the user to the tenant using regular supabase client
-      const { error: userTenantError } = await supabase
-        .from('user_tenants')
-        .insert([{
-          user_id: userId,
-          tenant_id: newTenant.id,
-          is_owner: true
-        }])
-
-      if (userTenantError) {
-        log('Failed to create user-tenant relationship', { error: userTenantError })
-        // Attempt to clean up the created tenant
-        await supabase
-          .from('tenants')
-          .delete()
-          .eq('id', newTenant.id)
-        return NextResponse.redirect(new URL('/auth/error?code=tenant_link_failed', request.url))
-      }
-
-      log('User-tenant relationship created successfully')
-    }
-
-    // Final verification check
-    const { data: finalCheck, error: finalCheckError } = await supabase
-      .from('user_tenants')
-      .select('tenant_id')
-      .eq('user_id', userId)
-      .single()
-
-    if (finalCheckError || !finalCheck) {
-      log('Final tenant check failed', { error: finalCheckError })
-      return NextResponse.redirect(new URL('/auth/error?code=tenant_verification_failed', request.url))
-    }
-
-    log('Auth callback completed successfully, redirecting to settings')
+    // Otherwise continue with normal login flow
+    log('Normal login flow, redirecting to settings')
     return NextResponse.redirect(new URL('/settings', request.url))
   } catch (error) {
     log('Unhandled error in auth callback', { error })
