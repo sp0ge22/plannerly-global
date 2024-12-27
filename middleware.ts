@@ -2,18 +2,48 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// Track refresh attempts to prevent infinite loops
+const refreshAttempts = new Map<string, { count: number; lastAttempt: number }>()
+
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
 
   try {
+    // Get session and refresh token if needed
     const {
       data: { session },
       error
     } = await supabase.auth.getSession()
 
+    // Rate limit check for token refresh
+    const authToken = req.cookies.get('supabase-auth-token')?.value
+    const clientId = authToken || req.ip || 'unknown'
+    const now = Date.now()
+    const attempts = refreshAttempts.get(clientId)
+
+    if (attempts) {
+      // Reset if last attempt was more than 5 minutes ago
+      if (now - attempts.lastAttempt > 5 * 60 * 1000) {
+        refreshAttempts.delete(clientId)
+      }
+      // Rate limit if too many attempts
+      else if (attempts.count > 5) {
+        return NextResponse.json(
+          { error: 'Too many refresh attempts. Please try again later.' },
+          { status: 429 }
+        )
+      }
+    }
+
     // Handle JWT expiration error
     if (error?.message?.includes('JWT expired')) {
+      // Track refresh attempt
+      refreshAttempts.set(clientId, {
+        count: (attempts?.count || 0) + 1,
+        lastAttempt: now
+      })
+
       // If the request is an API request, return 401
       if (req.nextUrl.pathname.startsWith('/api/')) {
         return NextResponse.json(
