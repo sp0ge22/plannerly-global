@@ -26,6 +26,13 @@ export async function GET(request: NextRequest) {
     const code = requestUrl.searchParams.get('code')
     const redirect = requestUrl.searchParams.get('redirect')
 
+    log('Callback received request', { 
+      url: request.url,
+      code: code ? code.substring(0, 8) + '...' : 'none',
+      redirect,
+      allParams: Object.fromEntries(requestUrl.searchParams)
+    })
+
     if (!code) {
       log('No code provided in callback')
       return NextResponse.redirect(new URL('/auth/login', request.url))
@@ -33,12 +40,18 @@ export async function GET(request: NextRequest) {
 
     // Check if this is an email verification callback first
     if (redirect === 'verify') {
-      log('Email verification callback, redirecting to success page')
+      log('Email verification callback detected, redirecting to success page')
       
       // Exchange the code for a session first
       const supabase = createRouteHandlerClient({ cookies })
-      await supabase.auth.exchangeCodeForSession(code)
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
       
+      if (exchangeError) {
+        log('Error exchanging code in verify flow', { error: exchangeError })
+        return NextResponse.redirect(new URL('/auth/error', request.url))
+      }
+
+      log('Successfully exchanged code, redirecting to verify-success')
       return NextResponse.redirect(new URL('/auth/verify-success', request.url))
     }
 

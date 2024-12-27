@@ -58,11 +58,14 @@ export function SignUp({
       }
 
       // Sign up the user
+      const redirectUrl = `${window.location.origin}/auth/callback?redirect=verify`
+      console.log('Signup redirect URL:', redirectUrl)
+      
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?redirect=verify`,
+          emailRedirectTo: redirectUrl,
           data: {
             name: name,
             organization_name: organizationName,
