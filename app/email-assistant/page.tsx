@@ -877,7 +877,7 @@ export default function EmailAssistantPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-instruction">How would you like to modify the prompt?</Label>
+              <Label htmlFor="edit-instruction">How would you like to modify this prompt?</Label>
               <Textarea
                 id="edit-instruction"
                 value={editInstruction}
