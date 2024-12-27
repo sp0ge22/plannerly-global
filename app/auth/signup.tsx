@@ -85,6 +85,28 @@ export function SignUp({
           })
 
         if (profileError) throw profileError
+
+        // Create a tenant for the new user
+        const tenantName = organizationName?.trim() || `${email.toLowerCase()}'s Organization`
+        const { data: tenantData, error: tenantError } = await supabase
+          .from('tenants')
+          .insert([{ name: tenantName }])
+          .select('id')
+          .single()
+
+        if (tenantError) throw tenantError
+        if (!tenantData?.id) throw new Error('Tenant creation returned no ID')
+
+        // Link user to tenant as owner
+        const { error: userTenantError } = await supabase
+          .from('user_tenants')
+          .insert([{
+            user_id: authData.user.id,
+            tenant_id: tenantData.id,
+            is_owner: true
+          }])
+
+        if (userTenantError) throw userTenantError
       }
 
       setMode('verify')
