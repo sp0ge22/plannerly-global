@@ -10,5 +10,18 @@ if (process.env.NODE_ENV !== 'production') {
   console.log('Supabase Key:', supabaseKey.substring(0, 5) + '...')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
-export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce'
+  }
+})
+
+export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+})
