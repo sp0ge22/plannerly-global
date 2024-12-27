@@ -175,8 +175,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/auth/error?code=tenant_verification_failed', request.url))
     }
 
-    log('Auth callback completed successfully, redirecting to tasks')
-    return NextResponse.redirect(new URL('/tasks', request.url))
+    // Check if this is an email verification callback
+    const redirect = requestUrl.searchParams.get('redirect')
+    if (redirect === 'verify') {
+      log('Email verification callback, redirecting to success page')
+      return NextResponse.redirect(new URL('/auth/verify-success', request.url))
+    }
+
+    log('Auth callback completed successfully, redirecting to settings')
+    return NextResponse.redirect(new URL('/settings', request.url))
   } catch (error) {
     log('Unhandled error in auth callback', { error })
     return NextResponse.redirect(new URL('/auth/login', request.url))
