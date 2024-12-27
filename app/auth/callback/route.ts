@@ -24,10 +24,22 @@ export async function GET(request: NextRequest) {
   try {
     const requestUrl = new URL(request.url)
     const code = requestUrl.searchParams.get('code')
+    const redirect = requestUrl.searchParams.get('redirect')
 
     if (!code) {
       log('No code provided in callback')
       return NextResponse.redirect(new URL('/auth/login', request.url))
+    }
+
+    // Check if this is an email verification callback first
+    if (redirect === 'verify') {
+      log('Email verification callback, redirecting to success page')
+      
+      // Exchange the code for a session first
+      const supabase = createRouteHandlerClient({ cookies })
+      await supabase.auth.exchangeCodeForSession(code)
+      
+      return NextResponse.redirect(new URL('/auth/verify-success', request.url))
     }
 
     log('Starting auth callback process', { code: code.substring(0, 8) + '...' })
@@ -173,16 +185,6 @@ export async function GET(request: NextRequest) {
     if (finalCheckError || !finalCheck) {
       log('Final tenant check failed', { error: finalCheckError })
       return NextResponse.redirect(new URL('/auth/error?code=tenant_verification_failed', request.url))
-    }
-
-    // Check if this is an email verification callback
-    const redirect = requestUrl.searchParams.get('redirect')
-    const next = requestUrl.searchParams.get('next')
-    
-    if (redirect === 'verify') {
-      log('Email verification callback, redirecting to success page')
-      const redirectUrl = next || '/settings'
-      return NextResponse.redirect(new URL(redirectUrl, request.url))
     }
 
     log('Auth callback completed successfully, redirecting to settings')
