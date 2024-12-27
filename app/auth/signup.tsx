@@ -62,7 +62,7 @@ export function SignUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?redirect=verify`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?redirect=verify&next=/auth/verify-success`,
           data: {
             name: name,
             organization_name: organizationName,
