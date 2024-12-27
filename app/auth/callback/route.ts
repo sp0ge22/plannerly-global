@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import type { NextRequest } from 'next/server'
 
 // Define type for loggable data
@@ -20,25 +19,6 @@ const log = (message: string, data?: LoggableData) => {
   }
   console.log(JSON.stringify(logMessage))
 }
-
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  throw new Error('Missing env.NEXT_PUBLIC_SUPABASE_URL')
-}
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing env.SUPABASE_SERVICE_ROLE_KEY')
-}
-
-// Create a service role client for guaranteed insert permissions
-const serviceRoleClient = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-)
 
 export async function GET(request: NextRequest) {
   try {
@@ -85,7 +65,6 @@ export async function GET(request: NextRequest) {
     })
 
     if (profileSelectError && profileSelectError.code !== 'PGRST116') {
-      // PGRST116 means no rows found. If it's another error, log it.
       log('Error checking for profile', { error: profileSelectError })
     }
 
@@ -110,7 +89,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user already has a tenant relationship
-    const { data: existingUserTenant, error: userTenantCheckError } = await serviceRoleClient
+    const { data: existingUserTenant, error: userTenantCheckError } = await supabase
       .from('user_tenants')
       .select('tenant_id')
       .eq('user_id', userId)
@@ -140,27 +119,21 @@ export async function GET(request: NextRequest) {
       const organizationName = user?.user_metadata?.organization_name || `${userEmail}'s Organization`
       log('Creating new tenant', { organizationName })
 
-      // Create new tenant
-      const { data: newTenant, error: tenantError } = await serviceRoleClient
+      // Create new tenant using regular supabase client
+      const { data: newTenant, error: tenantError } = await supabase
         .from('tenants')
         .insert([{ name: organizationName }])
         .select('id')
         .single()
 
-      log('Tenant creation completed', { 
-        success: !!newTenant,
-        error: tenantError,
-        tenantId: newTenant?.id 
-      })
-
       if (tenantError) {
         log('Failed to create tenant', { error: tenantError })
-        return NextResponse.redirect(new URL('/auth/login', request.url))
+        return NextResponse.redirect(new URL('/auth/error?code=tenant_creation_failed', request.url))
       }
 
       if (!newTenant) {
         log('No tenant created - unexpected state')
-        return NextResponse.redirect(new URL('/auth/login', request.url))
+        return NextResponse.redirect(new URL('/auth/error?code=tenant_missing', request.url))
       }
 
       log('Creating user-tenant relationship', {
@@ -168,8 +141,8 @@ export async function GET(request: NextRequest) {
         tenantId: newTenant.id
       })
 
-      // Link the user to the tenant
-      const { error: userTenantError } = await serviceRoleClient
+      // Link the user to the tenant using regular supabase client
+      const { error: userTenantError } = await supabase
         .from('user_tenants')
         .insert([{
           user_id: userId,
@@ -179,10 +152,27 @@ export async function GET(request: NextRequest) {
 
       if (userTenantError) {
         log('Failed to create user-tenant relationship', { error: userTenantError })
-        return NextResponse.redirect(new URL('/auth/login', request.url))
+        // Attempt to clean up the created tenant
+        await supabase
+          .from('tenants')
+          .delete()
+          .eq('id', newTenant.id)
+        return NextResponse.redirect(new URL('/auth/error?code=tenant_link_failed', request.url))
       }
 
       log('User-tenant relationship created successfully')
+    }
+
+    // Final verification check
+    const { data: finalCheck, error: finalCheckError } = await supabase
+      .from('user_tenants')
+      .select('tenant_id')
+      .eq('user_id', userId)
+      .single()
+
+    if (finalCheckError || !finalCheck) {
+      log('Final tenant check failed', { error: finalCheckError })
+      return NextResponse.redirect(new URL('/auth/error?code=tenant_verification_failed', request.url))
     }
 
     log('Auth callback completed successfully, redirecting to tasks')
