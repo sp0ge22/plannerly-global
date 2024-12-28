@@ -1,3 +1,4 @@
+// app/auth/callback/route.ts (or wherever your callback route is)
 export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +10,7 @@ import type { NextRequest } from 'next/server'
 // Define type for loggable data
 type LoggableData = Record<string, unknown>
 
-// Add a logging function that will show in Vercel Edge Runtime
+// A simple logging function that works in Edge
 const log = (message: string, data?: LoggableData) => {
   const timestamp = new Date().toISOString()
   const logMessage = {
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
       allParams: Object.fromEntries(requestUrl.searchParams)
     })
 
+    // If there's no ?code=, we can't exchange for a session
     if (!code) {
       log('No code provided in callback')
       return NextResponse.redirect(new URL('/auth/login', request.url))
@@ -42,28 +44,28 @@ export async function GET(request: NextRequest) {
 
     const supabase = createRouteHandlerClient({ cookies })
     
-    // Exchange the code for a session first
+    // Exchange the Supabase code for a session
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
     if (exchangeError) {
       log('Error exchanging code for session', { error: exchangeError })
       return NextResponse.redirect(new URL('/auth/error', request.url))
     }
 
-    // Get the session to check if this was a signup verification
+    // Check if user is actually logged in now
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     if (sessionError || !session?.user) {
       log('Session error or no user found', { error: sessionError })
       return NextResponse.redirect(new URL('/auth/login', request.url))
     }
 
-    // If this was a signup verification or has the verify redirect, show success page
+    // If it's a brand-new signup or if `?redirect=verify`, go to success
     if (type === 'signup' || redirect === 'verify') {
       log('Signup verification detected, redirecting to success page')
       return NextResponse.redirect(new URL('/auth/verify-success', request.url))
     }
 
-    // Otherwise continue with normal login flow
-    log('Normal login flow, redirecting to settings')
+    // Otherwise, it's a normal login (or password recovery, etc.)
+    log('Normal login flow, redirecting to /settings')
     return NextResponse.redirect(new URL('/settings', request.url))
   } catch (error) {
     log('Unhandled error in auth callback', { error })

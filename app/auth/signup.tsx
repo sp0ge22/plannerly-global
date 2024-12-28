@@ -1,3 +1,5 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Icons } from "@/components/ui/icons"
@@ -5,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { useToast } from "@/hooks/use-toast"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Loader2 } from 'lucide-react'
+import React from 'react'
 
 interface SignUpProps {
   email: string
@@ -57,8 +60,8 @@ export function SignUp({
         throw new Error('Password must be at least 8 characters long')
       }
 
-      // Sign up the user
-      const redirectUrl = `${window.location.origin}/auth/callback?redirect=verify`
+      // Only "/auth/callback" – no query params:
+      const redirectUrl = `${window.location.origin}/auth/callback`
       console.log('Signup redirect URL:', redirectUrl)
       
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
@@ -75,8 +78,9 @@ export function SignUp({
 
       if (signUpError) throw signUpError
 
+      // If user was created:
       if (authData.user) {
-        // Create profile after successful signup
+        // Example of upserting a profile record:
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -89,7 +93,7 @@ export function SignUp({
 
         if (profileError) throw profileError
 
-        // Create a tenant for the new user
+        // Example of creating tenant + user_tenants row:
         const tenantName = organizationName?.trim() || `${email.toLowerCase()}'s Organization`
         const { data: tenantData, error: tenantError } = await supabase
           .from('tenants')
@@ -100,7 +104,6 @@ export function SignUp({
         if (tenantError) throw tenantError
         if (!tenantData?.id) throw new Error('Tenant creation returned no ID')
 
-        // Link user to tenant as owner
         const { error: userTenantError } = await supabase
           .from('user_tenants')
           .insert([{
@@ -112,6 +115,7 @@ export function SignUp({
         if (userTenantError) throw userTenantError
       }
 
+      // Switch the UI mode to "verify" to show a "Check your email" screen, if you want
       setMode('verify')
       
       toast({
@@ -242,4 +246,4 @@ export function SignUp({
       </CardFooter>
     </Card>
   )
-} 
+}
