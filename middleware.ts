@@ -1,3 +1,5 @@
+// middleware.ts
+
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
@@ -46,10 +48,7 @@ export async function middleware(req: NextRequest) {
 
       // If the request is an API request, return 401
       if (req.nextUrl.pathname.startsWith('/api/')) {
-        return NextResponse.json(
-          { error: 'Session expired' },
-          { status: 401 }
-        )
+        return NextResponse.json({ error: 'Session expired' }, { status: 401 })
       }
       
       // For non-API requests, redirect to the landing page
@@ -59,9 +58,17 @@ export async function middleware(req: NextRequest) {
 
     // If there's no session and the path isn't public, redirect to landing
     if (!session) {
-      const publicPaths = ['/', '/login', '/signup', '/reset-password']
+      // ADD /auth/callback and /auth/verify-success to this list
+      const publicPaths = [
+        '/',
+        '/login',
+        '/signup',
+        '/reset-password',
+        '/auth/callback',
+        '/auth/verify-success',
+      ]
       const isPublicPath = publicPaths.includes(req.nextUrl.pathname)
-      
+
       if (!isPublicPath) {
         const redirectUrl = new URL('/', req.url)
         return NextResponse.redirect(redirectUrl)
@@ -74,10 +81,7 @@ export async function middleware(req: NextRequest) {
     
     // If there's an error, treat it as an unauthorized request
     if (req.nextUrl.pathname.startsWith('/api/')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
     const redirectUrl = new URL('/', req.url)
@@ -93,7 +97,7 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public folder
+     * - public folder or publicly accessible assets
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],

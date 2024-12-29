@@ -1,5 +1,3 @@
-"use client"
-
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Icons } from "@/components/ui/icons"
@@ -7,7 +5,6 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { useToast } from "@/hooks/use-toast"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Loader2 } from 'lucide-react'
-import React from 'react'
 
 interface SignUpProps {
   email: string
@@ -60,9 +57,8 @@ export function SignUp({
         throw new Error('Password must be at least 8 characters long')
       }
 
-      // Only "/auth/callback" – no query params:
-      const redirectUrl = `${window.location.origin}/auth/callback`
-      console.log('Signup redirect URL:', redirectUrl)
+      // Sign up the user
+      const redirectUrl = `${window.location.origin}/auth/callback?redirect=verify`
       
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -76,51 +72,58 @@ export function SignUp({
         }
       })
 
-      if (signUpError) throw signUpError
-
-      // If user was created:
-      if (authData.user) {
-        // Example of upserting a profile record:
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: authData.user.id,
-            email: email.toLowerCase(),
-            name: name,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-
-        if (profileError) throw profileError
-
-        // Example of creating tenant + user_tenants row:
-        const tenantName = organizationName?.trim() || `${email.toLowerCase()}'s Organization`
-        const { data: tenantData, error: tenantError } = await supabase
-          .from('tenants')
-          .insert([{ name: tenantName }])
-          .select('id')
-          .single()
-
-        if (tenantError) throw tenantError
-        if (!tenantData?.id) throw new Error('Tenant creation returned no ID')
-
-        const { error: userTenantError } = await supabase
-          .from('user_tenants')
-          .insert([{
-            user_id: authData.user.id,
-            tenant_id: tenantData.id,
-            is_owner: true
-          }])
-
-        if (userTenantError) throw userTenantError
+      if (signUpError) {
+        // Handle specific email sending error
+        if (signUpError.message === 'Error sending confirmation email') {
+          throw new Error('Unable to send confirmation email. Please try again later or contact support.')
+        }
+        throw signUpError
       }
 
-      // Switch the UI mode to "verify" to show a "Check your email" screen, if you want
+      if (!authData.user) {
+        throw new Error('Signup failed - no user data returned')
+      }
+
+      // Create profile after successful signup
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: authData.user.id,
+          email: email.toLowerCase(),
+          name: name,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+
+      if (profileError) throw profileError
+
+      // Create a tenant for the new user
+      const tenantName = organizationName?.trim() || `${email.toLowerCase()}'s Organization`
+      const { data: tenantData, error: tenantError } = await supabase
+        .from('tenants')
+        .insert([{ name: tenantName }])
+        .select('id')
+        .single()
+
+      if (tenantError) throw tenantError
+      if (!tenantData?.id) throw new Error('Tenant creation returned no ID')
+
+      // Link user to tenant as owner
+      const { error: userTenantError } = await supabase
+        .from('user_tenants')
+        .insert([{
+          user_id: authData.user.id,
+          tenant_id: tenantData.id,
+          is_owner: true
+        }])
+
+      if (userTenantError) throw userTenantError
+
       setMode('verify')
       
       toast({
-        title: "Check your email",
-        description: "We've sent you a confirmation link to complete your signup.",
+        title: "Account created",
+        description: "Please check your email to confirm your account. If you don't receive an email within a few minutes, please check your spam folder.",
       })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An error occurred during signup'
@@ -129,6 +132,7 @@ export function SignUp({
         description: errorMessage,
         variant: "destructive",
       })
+      console.error('Signup error:', error)
     } finally {
       setIsLoading(false)
     }
@@ -246,4 +250,4 @@ export function SignUp({
       </CardFooter>
     </Card>
   )
-}
+} 
