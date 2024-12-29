@@ -2,7 +2,7 @@
 import type { Metadata } from "next"
 import { Toaster } from "@/components/ui/toaster"
 import { ScrollToTop } from "@/components/ScrollToTop"
-import "../globals.css" // or the correct relative path to your global CSS
+import "@/app/globals.css" // or the correct relative path to your global CSS
 
 export const metadata: Metadata = {
   title: "Verify Success - Plannerly",
