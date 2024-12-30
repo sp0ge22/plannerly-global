@@ -7,7 +7,8 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { useToast } from "@/hooks/use-toast"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Loader2 } from 'lucide-react'
-import React from 'react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useState } from 'react'
 
 interface SignUpProps {
   email: string
@@ -46,6 +47,8 @@ export function SignUp({
 }: SignUpProps) {
   const supabase = createClientComponentClient()
   const { toast } = useToast()
+  const [signupMode, setSignupMode] = useState<'create' | 'join'>('create')
+  const [organizationId, setOrganizationId] = useState('')
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -60,9 +63,7 @@ export function SignUp({
         throw new Error('Password must be at least 8 characters long')
       }
 
-      // Only "/auth/callback" – no query params:
       const redirectUrl = `${window.location.origin}/auth/callback`
-      console.log('Signup redirect URL:', redirectUrl)
       
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -71,29 +72,31 @@ export function SignUp({
           emailRedirectTo: redirectUrl,
           data: {
             name: name,
-            organization_name: organizationName,
           }
         }
       })
 
       if (signUpError) throw signUpError
 
-      // If user was created:
-      if (authData.user) {
-        // Example of upserting a profile record:
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: authData.user.id,
-            email: email.toLowerCase(),
-            name: name,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
+      if (!authData.user) {
+        throw new Error('Signup failed - no user data returned')
+      }
 
-        if (profileError) throw profileError
+      // Create profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: authData.user.id,
+          email: email.toLowerCase(),
+          name: name,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
 
-        // Example of creating tenant + user_tenants row:
+      if (profileError) throw profileError
+
+      if (signupMode === 'create') {
+        // Create new organization
         const tenantName = organizationName?.trim() || `${email.toLowerCase()}'s Organization`
         const { data: tenantData, error: tenantError } = await supabase
           .from('tenants')
@@ -104,6 +107,7 @@ export function SignUp({
         if (tenantError) throw tenantError
         if (!tenantData?.id) throw new Error('Tenant creation returned no ID')
 
+        // Link user as owner
         const { error: userTenantError } = await supabase
           .from('user_tenants')
           .insert([{
@@ -113,9 +117,30 @@ export function SignUp({
           }])
 
         if (userTenantError) throw userTenantError
+      } else {
+        // Join existing organization
+        const { data: existingTenant, error: tenantCheckError } = await supabase
+          .from('tenants')
+          .select('id')
+          .eq('id', organizationId)
+          .single()
+
+        if (tenantCheckError || !existingTenant) {
+          throw new Error('Invalid organization ID. Please check and try again.')
+        }
+
+        // Link user as member
+        const { error: userTenantError } = await supabase
+          .from('user_tenants')
+          .insert([{
+            user_id: authData.user.id,
+            tenant_id: organizationId,
+            is_owner: false
+          }])
+
+        if (userTenantError) throw userTenantError
       }
 
-      // Switch the UI mode to "verify" to show a "Check your email" screen, if you want
       setMode('verify')
       
       toast({
@@ -129,6 +154,7 @@ export function SignUp({
         description: errorMessage,
         variant: "destructive",
       })
+      console.error('Signup error:', error)
     } finally {
       setIsLoading(false)
     }
@@ -146,6 +172,13 @@ export function SignUp({
         </p>
       </CardHeader>
       <CardContent className="grid gap-4">
+        <Tabs defaultValue="create" onValueChange={(value) => setSignupMode(value as 'create' | 'join')}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="create">Create Organization</TabsTrigger>
+            <TabsTrigger value="join">Join Organization</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         <form onSubmit={handleSignUp}>
           <div className="grid gap-2">
             <Input
@@ -159,16 +192,27 @@ export function SignUp({
               autoCorrect="off"
               required
             />
-            <Input
-              id="organizationName"
-              placeholder="Organization Name"
-              type="text"
-              value={organizationName}
-              onChange={(e) => setOrganizationName(e.target.value)}
-              autoCapitalize="words"
-              autoCorrect="off"
-              required
-            />
+            {signupMode === 'create' ? (
+              <Input
+                id="organizationName"
+                placeholder="Organization Name"
+                type="text"
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+                autoCapitalize="words"
+                autoCorrect="off"
+                required
+              />
+            ) : (
+              <Input
+                id="organizationId"
+                placeholder="Organization ID"
+                type="text"
+                value={organizationId}
+                onChange={(e) => setOrganizationId(e.target.value)}
+                required
+              />
+            )}
             <Input
               id="email"
               placeholder="name@example.com"
