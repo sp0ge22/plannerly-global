@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Crown, User, Pencil, Shield, Trash2, UserMinus, ImageIcon, InfoIcon, Building2 } from 'lucide-react'
+import { Loader2, Crown, User, Pencil, Shield, Trash2, UserMinus, ImageIcon, InfoIcon, Building2, Plus } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from 'next/navigation'
 import { PostgrestError } from '@supabase/supabase-js'
@@ -107,6 +107,19 @@ export default function SettingsPage() {
     orgName: string;
   } | null>(null);
   const [confirmOrgName, setConfirmOrgName] = useState('');
+  const [isCreatingOrg, setIsCreatingOrg] = useState(false)
+  const [newOrgData, setNewOrgData] = useState({
+    name: '',
+    avatar: null as File | null,
+    pin: ''
+  })
+  const [deleteOrgDialog, setDeleteOrgDialog] = useState<{
+    isOpen: boolean;
+    orgId: string;
+    orgName: string;
+  } | null>(null);
+  const [deleteOrgPin, setDeleteOrgPin] = useState('');
+  const [deleteOrgConfirmName, setDeleteOrgConfirmName] = useState('');
 
   useEffect(() => {
     const fetchTenants = async () => {
@@ -709,6 +722,136 @@ export default function SettingsPage() {
     }
   };
 
+  const handleCreateOrg = async () => {
+    if (!newOrgData.name.trim() || newOrgData.pin.length !== 4) return
+    
+    try {
+      // Create organization through secure API endpoint
+      const response = await fetch('/api/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          name: newOrgData.name.trim(),
+          pin: newOrgData.pin
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create organization')
+      }
+
+      const { id, name } = await response.json()
+
+      // Upload avatar if provided
+      let avatarUrl = null
+      if (newOrgData.avatar) {
+        const fileExt = newOrgData.avatar.name.split('.').pop()
+        const filePath = `${id}/${Math.random()}.${fileExt}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('org-avatars')
+          .upload(filePath, newOrgData.avatar)
+
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('org-avatars')
+            .getPublicUrl(filePath)
+
+          avatarUrl = publicUrl
+          
+          // Update tenant with avatar URL
+          await supabase
+            .from('tenants')
+            .update({ avatar_url: publicUrl })
+            .eq('id', id)
+        }
+      }
+
+      // Update local state
+      const newOrg = {
+        id,
+        name,
+        is_owner: true,
+        is_admin: true,
+        avatar_url: avatarUrl,
+        pin: newOrgData.pin
+      }
+      setOrganizations([newOrg, ...organizations])
+      setSelectedOrgId(id)
+
+      // Reset form
+      setNewOrgData({
+        name: '',
+        avatar: null,
+        pin: ''
+      })
+      setIsCreatingOrg(false)
+
+      toast({
+        title: "Organization created",
+        description: "Your new organization has been created successfully.",
+      })
+
+      // Refresh the page
+      router.refresh()
+    } catch (error) {
+      console.error('Error creating organization:', error)
+      toast({
+        title: "Error creating organization",
+        description: error instanceof Error ? error.message : "Could not create the organization. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteOrg = async () => {
+    if (!deleteOrgDialog || deleteOrgConfirmName !== deleteOrgDialog.orgName) return;
+    
+    try {
+      const response = await fetch(`/api/organizations/${deleteOrgDialog.orgId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          pin: deleteOrgPin,
+          confirmName: deleteOrgConfirmName 
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete organization');
+      }
+
+      // Update local state
+      setOrganizations(orgs => orgs.filter(org => org.id !== deleteOrgDialog.orgId));
+      setDeleteOrgDialog(null);
+      setDeleteOrgPin('');
+      setDeleteOrgConfirmName('');
+
+      // If we were viewing the org we just deleted, reset selection
+      if (selectedOrgId === deleteOrgDialog.orgId) {
+        setSelectedOrgId(organizations.find(org => org.id !== deleteOrgDialog.orgId)?.id || null);
+      }
+
+      toast({
+        title: "Organization deleted",
+        description: `${deleteOrgDialog.orgName} has been permanently deleted.`,
+      });
+
+      // Refresh the page
+      router.refresh();
+    } catch (error) {
+      console.error('Error deleting organization:', error);
+      toast({
+        title: "Error deleting organization",
+        description: error instanceof Error ? error.message : "Failed to delete the organization.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-neutral-50">
       <main className="flex-1 p-6">
@@ -865,6 +1008,14 @@ export default function SettingsPage() {
                   </TabsList>
                   
                   <TabsContent value="my-orgs" className="space-y-6">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-semibold">My Organizations</h3>
+                      <Button onClick={() => setIsCreatingOrg(true)} className="gap-2">
+                        <Plus className="w-4 h-4" />
+                        Create Organization
+                      </Button>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {organizations.map((org) => (
                         <div
@@ -924,6 +1075,24 @@ export default function SettingsPage() {
                                   >
                                     <UserMinus className="w-4 h-4" />
                                     Leave
+                                  </Button>
+                                )}
+                                {org.is_owner && organizations.filter(o => o.is_owner).length > 1 && (
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteOrgDialog({
+                                        isOpen: true,
+                                        orgId: org.id,
+                                        orgName: org.name
+                                      });
+                                    }}
+                                    className="gap-2"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete
                                   </Button>
                                 )}
                                 <Button
@@ -1571,6 +1740,256 @@ export default function SettingsPage() {
                   >
                     <UserMinus className="w-4 h-4" />
                     Leave Organization
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Add Create Organization Dialog */}
+            <Dialog open={isCreatingOrg} onOpenChange={setIsCreatingOrg}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Organization</DialogTitle>
+                  <DialogDescription>
+                    Create a new organization and invite team members
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6">
+                  <div className="bg-muted p-4 rounded-lg space-y-4">
+                    <div className="flex items-center gap-4">
+                      <Avatar className="h-20 w-20">
+                        <AvatarImage 
+                          src={newOrgData.avatar ? URL.createObjectURL(newOrgData.avatar) : undefined}
+                        />
+                        <AvatarFallback>
+                          {newOrgData.name ? newOrgData.name.slice(0, 2).toUpperCase() : <Building2 className="h-8 w-8" />}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium">Organization Picture</h4>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          Add a logo or image to represent your organization
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => document.getElementById('new-org-avatar')?.click()}
+                          className="w-[140px]"
+                        >
+                          <ImageIcon className="w-4 h-4 mr-2" />
+                          Upload Image
+                        </Button>
+                      </div>
+                    </div>
+                    <input
+                      type="file"
+                      id="new-org-avatar"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setNewOrgData(prev => ({ ...prev, avatar: file }))
+                        }
+                      }}
+                    />
+                    <div className="text-[13px] text-muted-foreground flex items-center gap-1">
+                      <InfoIcon className="w-3 h-3" />
+                      <span>JPG, GIF or PNG. Max size of 2MB.</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-org-name">Organization Name</Label>
+                      <Input
+                        id="new-org-name"
+                        placeholder="Enter organization name"
+                        value={newOrgData.name}
+                        onChange={(e) => setNewOrgData(prev => ({ ...prev, name: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="new-org-pin">Security PIN</Label>
+                      <Input
+                        id="new-org-pin"
+                        placeholder="Enter 4-digit PIN"
+                        value={newOrgData.pin}
+                        onChange={(e) => {
+                          // Only allow numbers and limit to 4 digits
+                          const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+                          setNewOrgData(prev => ({ ...prev, pin: value }))
+                        }}
+                        type="password"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        inputMode="numeric"
+                        className="text-lg tracking-widest"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        This PIN will be required for sensitive organization actions
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-blue-500" />
+                      <h4 className="font-medium">Security PIN</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Your organization PIN will be required for:
+                    </p>
+                    <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                      <li>Removing members</li>
+                      <li>Changing member roles</li>
+                      <li>Deleting organization resources</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-yellow-500" />
+                      <h4 className="font-medium">Owner Privileges</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      As the owner, you'll have full control over the organization, including managing members, settings, and security preferences.
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter className="mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsCreatingOrg(false)
+                      setNewOrgData({
+                        name: '',
+                        avatar: null,
+                        pin: ''
+                      })
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleCreateOrg}
+                    disabled={!newOrgData.name.trim() || newOrgData.pin.length !== 4}
+                  >
+                    Create Organization
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Add Delete Organization Dialog */}
+            <Dialog 
+              open={deleteOrgDialog?.isOpen} 
+              onOpenChange={(open) => {
+                if (!open) {
+                  setDeleteOrgDialog(null);
+                  setDeleteOrgPin('');
+                  setDeleteOrgConfirmName('');
+                }
+              }}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-16 w-16">
+                      <AvatarImage src={organizations.find(org => org.id === deleteOrgDialog?.orgId)?.avatar_url ?? undefined} />
+                      <AvatarFallback>
+                        {deleteOrgDialog?.orgName.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <DialogTitle className="text-xl text-destructive">Delete Organization</DialogTitle>
+                      <DialogDescription className="mt-1">
+                        This action cannot be undone
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+                <div className="mt-6">
+                  <div className="space-y-4">
+                    <div className="bg-destructive/10 p-4 rounded-lg space-y-2">
+                      <h4 className="font-medium text-sm text-destructive">Warning:</h4>
+                      <p className="text-sm text-destructive">
+                        Deleting this organization will:
+                      </p>
+                      <ul className="text-sm text-destructive list-disc list-inside space-y-1">
+                        <li>Remove all members</li>
+                        <li>Delete all organization data</li>
+                        <li>Cancel any active subscriptions</li>
+                        <li>This action is permanent and cannot be undone</li>
+                      </ul>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label htmlFor="delete-org-name" className="text-sm font-medium">
+                        Type organization name to confirm
+                      </Label>
+                      <Input
+                        id="delete-org-name"
+                        value={deleteOrgConfirmName}
+                        onChange={(e) => setDeleteOrgConfirmName(e.target.value)}
+                        placeholder={deleteOrgDialog?.orgName}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Please type <span className="font-medium">{deleteOrgDialog?.orgName}</span> to confirm
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label htmlFor="delete-pin" className="text-sm font-medium">
+                        Enter Organization PIN
+                      </Label>
+                      <Input
+                        id="delete-pin"
+                        type="password"
+                        value={deleteOrgPin}
+                        onChange={(e) => {
+                          // Only allow numbers and limit to 4 digits
+                          const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+                          setDeleteOrgPin(value)
+                        }}
+                        placeholder="Enter 4-digit PIN"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        inputMode="numeric"
+                        className="text-lg tracking-widest"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Enter your organization's security PIN to confirm deletion
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter className="mt-6 gap-2 sm:gap-0">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setDeleteOrgDialog(null);
+                      setDeleteOrgPin('');
+                      setDeleteOrgConfirmName('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteOrg}
+                    disabled={
+                      !deleteOrgDialog ||
+                      !deleteOrgPin ||
+                      deleteOrgPin.length !== 4 ||
+                      !deleteOrgConfirmName ||
+                      deleteOrgConfirmName !== deleteOrgDialog.orgName
+                    }
+                    className="gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Organization
                   </Button>
                 </DialogFooter>
               </DialogContent>

@@ -9,6 +9,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Loader2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface SignUpProps {
   email: string
@@ -167,90 +168,131 @@ export function SignUp({
           <Icons.logo className="h-8 w-8 text-primary" />
           <CardTitle className="text-3xl font-bold">Plannerly</CardTitle>
         </div>
-        <p className="text-sm text-center text-muted-foreground">
-          Create your Plannerly account to start managing tasks and resources
-        </p>
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={signupMode}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.2 }}
+            className="text-sm text-center text-muted-foreground"
+          >
+            {signupMode === 'create' 
+              ? "Create a new workspace and invite your team to collaborate"
+              : "Join your team's existing workspace to start collaborating"
+            }
+          </motion.p>
+        </AnimatePresence>
       </CardHeader>
       <CardContent className="grid gap-4">
         <Tabs defaultValue="create" onValueChange={(value) => setSignupMode(value as 'create' | 'join')}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="create">Create Organization</TabsTrigger>
-            <TabsTrigger value="join">Join Organization</TabsTrigger>
+          <TabsList className="relative grid w-full grid-cols-2 p-1 bg-muted rounded-lg h-10">
+            <motion.div
+              className="absolute inset-0 z-10 m-1 w-[calc(50%-0.5rem)]"
+              initial={false}
+              animate={{
+                x: signupMode === 'create' ? '0%' : '100%',
+              }}
+              transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
+            >
+              <div className="h-full bg-background rounded-md shadow-sm" />
+            </motion.div>
+            <TabsTrigger 
+              value="create" 
+              className="relative z-20 data-[state=active]:text-foreground/90 data-[state=active]:shadow-none"
+            >
+              Create Organization
+            </TabsTrigger>
+            <TabsTrigger 
+              value="join" 
+              className="relative z-20 data-[state=active]:text-foreground/90 data-[state=active]:shadow-none"
+            >
+              Join Organization
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        <form onSubmit={handleSignUp}>
-          <div className="grid gap-2">
-            <Input
-              id="name"
-              placeholder="Full Name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoCapitalize="words"
-              autoComplete="name"
-              autoCorrect="off"
-              required
-            />
-            {signupMode === 'create' ? (
+        <AnimatePresence mode="wait">
+          <motion.form
+            key={signupMode}
+            initial={{ opacity: 0, x: signupMode === 'create' ? -20 : 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: signupMode === 'create' ? 20 : -20 }}
+            transition={{ duration: 0.3 }}
+            onSubmit={handleSignUp}
+          >
+            <div className="grid gap-2">
               <Input
-                id="organizationName"
-                placeholder="Organization Name"
+                id="name"
+                placeholder="Full Name"
                 type="text"
-                value={organizationName}
-                onChange={(e) => setOrganizationName(e.target.value)}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 autoCapitalize="words"
+                autoComplete="name"
                 autoCorrect="off"
                 required
               />
-            ) : (
+              {signupMode === 'create' ? (
+                <Input
+                  id="organizationName"
+                  placeholder="Organization Name"
+                  type="text"
+                  value={organizationName}
+                  onChange={(e) => setOrganizationName(e.target.value)}
+                  autoCapitalize="words"
+                  autoCorrect="off"
+                  required
+                />
+              ) : (
+                <Input
+                  id="organizationId"
+                  placeholder="Organization ID"
+                  type="text"
+                  value={organizationId}
+                  onChange={(e) => setOrganizationId(e.target.value)}
+                  required
+                />
+              )}
               <Input
-                id="organizationId"
-                placeholder="Organization ID"
-                type="text"
-                value={organizationId}
-                onChange={(e) => setOrganizationId(e.target.value)}
+                id="email"
+                placeholder="name@example.com"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoCapitalize="none"
+                autoComplete="email"
+                autoCorrect="off"
                 required
               />
-            )}
-            <Input
-              id="email"
-              placeholder="name@example.com"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoCapitalize="none"
-              autoComplete="email"
-              autoCorrect="off"
-              required
-            />
-            <Input
-              id="password"
-              placeholder="Password (min. 8 characters)"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-            />
-            <Input
-              id="confirmPassword"
-              placeholder="Confirm Password"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-            <Button className="w-full" type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
-                </>
-              ) : 'Create Account'}
-            </Button>
-          </div>
-        </form>
+              <Input
+                id="password"
+                placeholder="Password (min. 8 characters)"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+              <Input
+                id="confirmPassword"
+                placeholder="Confirm Password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+              <Button className="w-full" type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating account...
+                  </>
+                ) : 'Create Account'}
+              </Button>
+            </div>
+          </motion.form>
+        </AnimatePresence>
       </CardContent>
       <CardFooter className="flex flex-col space-y-4">
         <div className="flex flex-col space-y-2 text-center text-sm text-muted-foreground">
