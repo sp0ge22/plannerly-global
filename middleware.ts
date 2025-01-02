@@ -9,6 +9,10 @@ const refreshAttempts = new Map<string, { count: number; lastAttempt: number }>(
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
+  
+  // Add pathname to headers for layout
+  res.headers.set('x-pathname', req.nextUrl.pathname)
+  
   const supabase = createMiddlewareClient({ req, res })
 
   try {
@@ -66,6 +70,8 @@ export async function middleware(req: NextRequest) {
         '/reset-password',
         '/auth/callback',
         '/auth/verify-success',
+        '/auth/login',
+        '/auth/signup'
       ]
       const isPublicPath = publicPaths.includes(req.nextUrl.pathname)
 

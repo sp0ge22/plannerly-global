@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster"
-import { HeaderWrapper } from "@/components/Header/HeaderWrapper"
 import { ScrollToTop } from "@/components/ScrollToTop"
+import ClientLayout from "../components/ClientLayout"
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -32,13 +32,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ScrollToTop />
-        <div className="min-h-screen flex flex-col">
-          <HeaderWrapper />
-          <main className="flex-1">
-            {children}
-          </main>
-          <Toaster />
-        </div>
+        <ClientLayout>
+          {children}
+        </ClientLayout>
+        <Toaster />
       </body>
     </html>
   );
