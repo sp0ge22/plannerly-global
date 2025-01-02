@@ -14,6 +14,18 @@ pnpm dev
 bun dev
 ```
 
+
+
+## Apology
+Hey bro, I just wanted to check in and see how you're doing, and I really hope you're feeling better soon. Take care of yourself, Wishing you a speedy recovery!
+I want to sincerely apologize for any inconvenience caused by my earlier persistence while resolving issues. My intention was to help, but I realize I could have been more mindful.
+Thank you for your patience as I continue to grow and improve my communication skills.
+Sorry about the rift that happened between us, i see that you have blocked me already its fine
+i never knew you were at the hospital !!
+
+
+
+
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
