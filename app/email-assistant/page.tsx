@@ -445,33 +445,40 @@ export default function EmailAssistantPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-neutral-50">
+    <div className="flex flex-col min-h-screen bg-gradient-to-b from-neutral-50 to-neutral-100">
       <main className="flex-1 p-6">
-        <div className="max-w-5xl mx-auto space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Mail className="w-6 h-6" />
-              <h1 className="text-3xl font-bold">Email Assistant</h1>
+        <div className="max-w-7xl mx-auto space-y-6">
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-6 h-6" />
+                  <h1 className="text-3xl font-bold tracking-tight">Email Assistant</h1>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Generate and refine professional email responses with AI
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setShowWorkflow(true)} size="sm" className="h-9">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Quick Start Guide
+                </Button>
+                <Button variant="outline" onClick={() => window.location.href = '/help/email-assistant'} size="sm" className="h-9">
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Help & Guides
+                </Button>
+                <Button variant="outline" onClick={() => window.location.href = '/prompt-library'} size="sm" className="h-9">
+                  <Library className="w-4 h-4 mr-2" />
+                  Prompt Library
+                </Button>
+                <Button onClick={handleAddPromptClick} size="sm" className="h-9">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Prompt
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" onClick={() => setShowWorkflow(true)}>
-                <Sparkles className="w-4 h-4 mr-2" />
-                Quick Start Guide
-              </Button>
-              <Button variant="ghost" onClick={() => window.location.href = '/help/email-assistant'}>
-                <MessageSquare className="w-4 h-4 mr-2" />
-                Help & Guides
-              </Button>
-              <Button variant="outline" onClick={() => window.location.href = '/prompt-library'}>
-                <Library className="w-4 h-4 mr-2" />
-                Prompt Library
-              </Button>
-              <Button onClick={handleAddPromptClick}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Prompt
-              </Button>
-            </div>
-          </div>
+          </Card>
 
           <AnimatePresence>
             {showWorkflow && (
@@ -503,10 +510,8 @@ export default function EmailAssistantPage() {
           </AnimatePresence>
 
           <Card>
-            <CardHeader>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex space-x-4">
+            <CardContent className="space-y-4 p-6">
+              <div className="flex space-x-4 mb-6">
                 <Button
                   variant={mode === 'response' ? 'default' : 'outline'}
                   onClick={() => {
@@ -514,6 +519,7 @@ export default function EmailAssistantPage() {
                     setSelectedPrompt('')
                   }}
                   className="flex-1"
+                  size="sm"
                 >
                   <MessageSquare className="w-4 h-4 mr-2" />
                   Generate Response
@@ -525,6 +531,7 @@ export default function EmailAssistantPage() {
                     setSelectedPrompt('')
                   }}
                   className="flex-1"
+                  size="sm"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Rewrite Email

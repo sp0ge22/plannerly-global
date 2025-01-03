@@ -392,275 +392,280 @@ export function DashboardComponent() {
       className="container mx-auto py-8 px-4"
     >
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Task Dashboard</h1>
-            <div className="flex items-center mt-2 text-gray-600">
-              <Calendar className="w-4 h-4 mr-2" />
-              <span>{currentDate.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}</span>
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="space-y-1">
+              <h1 className="text-3xl font-bold tracking-tight">Task Dashboard</h1>
+              <div className="text-sm text-muted-foreground flex items-center">
+                <Calendar className="w-4 h-4 mr-2" />
+                <span>{currentDate.toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  setShowArchived(!showArchived)
+                  await refreshTasks()
+                }}
+                className="h-9"
+              >
+                {showArchived ? (
+                  <>
+                    <ArchiveRestore className="w-4 h-4 mr-1" />
+                    Show Active Tasks
+                  </>
+                ) : (
+                  <>
+                    <Archive className="w-4 h-4 mr-1" />
+                    Show Archived Tasks
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refreshTasks}
+                disabled={isRefreshing}
+                className="h-9"
+              >
+                <RefreshCcw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <Button onClick={handleAddTaskClick} size="sm" className="h-9">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Task
+              </Button>
+
+              <Dialog open={showAddTaskSuggestionDialog} onOpenChange={setShowAddTaskSuggestionDialog}>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-full bg-primary/10">
+                        <Sparkles className="w-8 h-8 text-primary" />
+                      </div>
+                      <div>
+                        <DialogTitle className="text-xl">Try AI-Assisted Creation?</DialogTitle>
+                        <DialogDescription className="text-base">
+                          Let AI help you create tasks more efficiently
+                        </DialogDescription>
+                      </div>
+                    </div>
+                  </DialogHeader>
+                  <div className="py-6">
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                          <Wand2 className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-medium mb-1">Smart Task Generation</h4>
+                          <p className="text-sm text-muted-foreground">
+                            AI helps you create well-structured tasks based on your description
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                          <RefreshCcw className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-medium mb-1">Automatic Details</h4>
+                          <p className="text-sm text-muted-foreground">
+                            AI suggests appropriate fields like priority, due dates, and assignees
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                          <MessageSquare className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-medium mb-1">Natural Language Input</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Just describe what you need, and AI will structure it properly
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter className="flex justify-end gap-2 sm:gap-2">
+                    <Button variant="outline" onClick={() => handleTaskSuggestionResponse(false)}>
+                      <Edit2 className="w-4 h-4 mr-2" />
+                      I'll create it manually
+                    </Button>
+                    <Button onClick={() => handleTaskSuggestionResponse(true)} className="gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      Use AI Assistant
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <AddTaskDialog 
+                addTask={addTask} 
+                openAIDirectly={false}
+                forceOpen={isAddingTask}
+                onOpenChange={(open) => {
+                  setIsAddingTask(open)
+                  if (!open) setIsAddingTaskWithAI(false)
+                }}
+              >
+                <div className="hidden" />
+              </AddTaskDialog>
+
+              <AddTaskDialog 
+                addTask={addTask} 
+                openAIDirectly={true}
+                forceOpen={isAddingTaskWithAI}
+                onOpenChange={(open) => {
+                  setIsAddingTaskWithAI(open)
+                  if (!open) setIsAddingTask(false)
+                }}
+              >
+                <div className="hidden" />
+              </AddTaskDialog>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                setShowArchived(!showArchived)
-                await refreshTasks()
-              }}
-            >
-              {showArchived ? (
-                <>
-                  <ArchiveRestore className="w-4 h-4 mr-1" />
-                  Show Active Tasks
-                </>
-              ) : (
-                <>
-                  <Archive className="w-4 h-4 mr-1" />
-                  Show Archived Tasks
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refreshTasks}
-              disabled={isRefreshing}
-            >
-              <RefreshCcw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button onClick={handleAddTaskClick}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Task
-            </Button>
-            <Dialog open={showAddTaskSuggestionDialog} onOpenChange={setShowAddTaskSuggestionDialog}>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-full bg-primary/10">
-                      <Sparkles className="w-8 h-8 text-primary" />
-                    </div>
-                    <div>
-                      <DialogTitle className="text-xl">Try AI-Assisted Creation?</DialogTitle>
-                      <DialogDescription className="text-base">
-                        Let AI help you create tasks more efficiently
-                      </DialogDescription>
-                    </div>
-                  </div>
-                </DialogHeader>
-                <div className="py-6">
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-3">
-                      <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
-                        <Wand2 className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium mb-1">Smart Task Generation</h4>
-                        <p className="text-sm text-muted-foreground">
-                          AI helps you create well-structured tasks based on your description
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
-                        <RefreshCcw className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium mb-1">Automatic Details</h4>
-                        <p className="text-sm text-muted-foreground">
-                          AI suggests appropriate fields like priority, due dates, and assignees
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
-                        <MessageSquare className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium mb-1">Natural Language Input</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Just describe what you need, and AI will structure it properly
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter className="flex justify-end gap-2 sm:gap-2">
-                  <Button variant="outline" onClick={() => handleTaskSuggestionResponse(false)}>
-                    <Edit2 className="w-4 h-4 mr-2" />
-                    I'll create it manually
-                  </Button>
-                  <Button onClick={() => handleTaskSuggestionResponse(true)} className="gap-2">
-                    <Sparkles className="w-4 h-4" />
-                    Use AI Assistant
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
 
-            <AddTaskDialog 
-              addTask={addTask} 
-              openAIDirectly={false}
-              forceOpen={isAddingTask}
-              onOpenChange={(open) => {
-                setIsAddingTask(open)
-                if (!open) setIsAddingTaskWithAI(false)
-              }}
-            >
-              <div className="hidden" />
-            </AddTaskDialog>
-
-            <AddTaskDialog 
-              addTask={addTask} 
-              openAIDirectly={true}
-              forceOpen={isAddingTaskWithAI}
-              onOpenChange={(open) => {
-                setIsAddingTaskWithAI(open)
-                if (!open) setIsAddingTask(false)
-              }}
-            >
-              <div className="hidden" />
-            </AddTaskDialog>
-          </div>
-        </div>
-
-        <Card className="p-4 mb-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full">
-            <div className="relative w-[400px]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 placeholder="Search tasks..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
+                className="pl-9 bg-neutral-50 w-full"
               />
             </div>
-            <div className="flex items-center gap-4 flex-1">
+            <div className="flex items-center gap-4 flex-[2]">
               <Filter className="w-4 h-4 text-gray-400" />
-              <Select value={filterTenant} onValueChange={setFilterTenant}>
-                <SelectTrigger className="w-[300px]">
-                  <SelectValue>
-                    {filterTenant === 'all' ? (
-                      <span>All Organizations</span>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <Avatar className="h-5 w-5">
-                          <AvatarImage 
-                            src={uniqueTenants.find(t => t.id === filterTenant)?.avatar_url}
-                          />
-                          <AvatarFallback>
-                            {(uniqueTenants.find(t => t.id === filterTenant)?.name || '??').slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const tenant = uniqueTenants.find(t => t.id === filterTenant)
-                            return (
-                              <>
-                                <span className="truncate">
-                                  {tenant?.name}
-                                </span>
-                                {tenant?.is_owner && (
-                                  <Crown className="w-3 h-3 text-yellow-500" />
-                                )}
-                                {!tenant?.is_owner && tenant?.is_admin && (
-                                  <Shield className="w-3 h-3 text-blue-500" />
-                                )}
-                                {!tenant?.is_owner && !tenant?.is_admin && (
-                                  <User className="w-3 h-3" />
-                                )}
-                              </>
-                            )
-                          })()}
+              <div className="grid grid-cols-3 gap-4 w-full">
+                <Select value={filterTenant} onValueChange={setFilterTenant}>
+                  <SelectTrigger className="bg-neutral-50">
+                    <SelectValue>
+                      {filterTenant === 'all' ? (
+                        <span>All Organizations</span>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage 
+                              src={uniqueTenants.find(t => t.id === filterTenant)?.avatar_url}
+                            />
+                            <AvatarFallback>
+                              {(uniqueTenants.find(t => t.id === filterTenant)?.name || '??').slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const tenant = uniqueTenants.find(t => t.id === filterTenant)
+                              return (
+                                <>
+                                  <span className="truncate">
+                                    {tenant?.name}
+                                  </span>
+                                  {tenant?.is_owner && (
+                                    <Crown className="w-3 h-3 text-yellow-500" />
+                                  )}
+                                  {!tenant?.is_owner && tenant?.is_admin && (
+                                    <Shield className="w-3 h-3 text-blue-500" />
+                                  )}
+                                  {!tenant?.is_owner && !tenant?.is_admin && (
+                                    <User className="w-3 h-3" />
+                                  )}
+                                </>
+                              )
+                            })()}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Organizations</SelectItem>
-                  {uniqueTenants.map((tenant) => (
-                    <SelectItem key={tenant.id} value={tenant.id}>
-                      <div className="flex items-center space-x-2">
-                        <Avatar className="h-5 w-5">
-                          <AvatarImage src={tenant.avatar_url} />
-                          <AvatarFallback>
-                            {tenant.name.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex items-center gap-2">
-                          <span className="truncate">{tenant.name}</span>
-                          {tenant.is_owner && (
-                            <Crown className="w-3 h-3 text-yellow-500" />
-                          )}
-                          {!tenant.is_owner && tenant.is_admin && (
-                            <Shield className="w-3 h-3 text-blue-500" />
-                          )}
-                          {!tenant.is_owner && !tenant.is_admin && (
-                            <User className="w-3 h-3" />
-                          )}
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Organizations</SelectItem>
+                    {uniqueTenants.map((tenant) => (
+                      <SelectItem key={tenant.id} value={tenant.id}>
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={tenant.avatar_url} />
+                            <AvatarFallback>
+                              {tenant.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex items-center gap-2">
+                            <span className="truncate">{tenant.name}</span>
+                            {tenant.is_owner && (
+                              <Crown className="w-3 h-3 text-yellow-500" />
+                            )}
+                            {!tenant.is_owner && tenant.is_admin && (
+                              <Shield className="w-3 h-3 text-blue-500" />
+                            )}
+                            {!tenant.is_owner && !tenant.is_admin && (
+                              <User className="w-3 h-3" />
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filterPriority} onValueChange={setFilterPriority}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue>
-                    {filterPriority === 'all' ? 'All Priorities' : filterPriority}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priorities</SelectItem>
-                  <SelectItem value="Low">Low</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="High">High</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue>
-                    {filterAssignee === 'all' ? (
-                      <span>All Assignees</span>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <Avatar className="h-5 w-5">
-                          <AvatarImage 
-                            src={uniqueAssignees.find(a => a.name === filterAssignee)?.avatar_url ?? undefined}
-                          />
-                          <AvatarFallback>
-                            {filterAssignee.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span>{filterAssignee}</span>
-                      </div>
-                    )}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Assignees</SelectItem>
-                  {uniqueAssignees.map((assignee) => (
-                    <SelectItem key={assignee.name} value={assignee.name}>
-                      <div className="flex items-center space-x-2">
-                        <Avatar className="h-5 w-5">
-                          <AvatarImage src={assignee.avatar_url ?? undefined} />
-                          <AvatarFallback>
-                            {assignee.name.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span>{assignee.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={filterPriority} onValueChange={setFilterPriority}>
+                  <SelectTrigger className="bg-neutral-50">
+                    <SelectValue>
+                      {filterPriority === 'all' ? 'All Priorities' : filterPriority}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Priorities</SelectItem>
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+                  <SelectTrigger className="bg-neutral-50">
+                    <SelectValue>
+                      {filterAssignee === 'all' ? (
+                        <span>All Assignees</span>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage 
+                              src={uniqueAssignees.find(a => a.name === filterAssignee)?.avatar_url ?? undefined}
+                            />
+                            <AvatarFallback>
+                              {filterAssignee.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{filterAssignee}</span>
+                        </div>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Assignees</SelectItem>
+                    {uniqueAssignees.map((assignee) => (
+                      <SelectItem key={assignee.name} value={assignee.name}>
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={assignee.avatar_url ?? undefined} />
+                            <AvatarFallback>
+                              {assignee.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{assignee.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           
@@ -700,7 +705,7 @@ export function DashboardComponent() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center h-64 space-y-4"
+              className="flex flex-col items-center justify-center h-64 space-y-4 mt-6"
             >
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
               <p className="text-lg font-medium">Loading tasks...</p>
@@ -710,7 +715,7 @@ export function DashboardComponent() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="grid grid-cols-1 md:grid-cols-3 gap-6"
+              className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6"
             >
               {filteredTasks
                 .sort((a, b) => new Date(b.due || b.created_at).getTime() - new Date(a.due || a.created_at).getTime())
@@ -730,7 +735,7 @@ export function DashboardComponent() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="grid grid-cols-1 md:grid-cols-3 gap-6"
+              className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6"
             >
               {statusColumns.map((status) => (
                 <StatusColumn

@@ -57,9 +57,7 @@ const NavLeft = ({
       </motion.button>
       <Logo />
       <NavLink text="Tasks" href="/tasks" />
-      <NavLink text="Time Sheet" href="/timesheet" />
       <NavLink text="Resources" href="/resources" />
-      <NavLink text="Notes" href="/notes" />
       <NavLink text="Email Assistant" href="/email-assistant" />
     </div>
   );

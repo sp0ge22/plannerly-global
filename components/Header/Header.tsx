@@ -336,9 +336,7 @@ export function Header() {
           >
             <ul className="flex flex-col p-4 space-y-2">
               <li><Link href="/tasks" onClick={() => setIsMobileMenuOpen(false)}><Button variant="ghost" className="w-full justify-start">Tasks</Button></Link></li>
-              <li><Link href="/timesheet" onClick={() => setIsMobileMenuOpen(false)}><Button variant="ghost" className="w-full justify-start">Time Sheet</Button></Link></li>
               <li><Link href="/resources" onClick={() => setIsMobileMenuOpen(false)}><Button variant="ghost" className="w-full justify-start">Resources</Button></Link></li>
-              <li><Link href="/notes" onClick={() => setIsMobileMenuOpen(false)}><Button variant="ghost" className="w-full justify-start">Notes</Button></Link></li>
               <li><Link href="/email-assistant" onClick={() => setIsMobileMenuOpen(false)}><Button variant="ghost" className="w-full justify-start">Email Assistant</Button></Link></li>
               {isAuthenticated && (
                 <li className="md:hidden">
