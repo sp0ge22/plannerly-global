@@ -50,6 +50,7 @@ Feel free to ask about any of these topics or specific email scenarios!`
 export default function EmailAssistantHelpPage() {
   const [expandedPrompts, setExpandedPrompts] = useState<ExpandedPrompts>({})
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
+  const [showWorkflow, setShowWorkflow] = useState(false)
   const [selectedExample, setSelectedExample] = useState<{
     title: string;
     description: string | null;
@@ -194,6 +195,10 @@ export default function EmailAssistantHelpPage() {
               <h1 className="text-3xl font-bold">Email Assistant Help</h1>
             </div>
             <div className="flex items-center space-x-2">
+              <Button variant="outline" onClick={() => setShowWorkflow(true)}>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Quick Start Guide
+              </Button>
               <Button variant="outline" onClick={() => window.location.href = '/email-assistant'}>
                 <Mail className="w-4 h-4 mr-2" />
                 Email Assistant
@@ -204,6 +209,36 @@ export default function EmailAssistantHelpPage() {
               </Button>
             </div>
           </div>
+
+          {/* Add Workflow Modal */}
+          <AnimatePresence>
+            {showWorkflow && (
+              <Dialog open={showWorkflow} onOpenChange={setShowWorkflow}>
+                <DialogContent className="max-w-4xl">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <DialogHeader>
+                      <DialogTitle>Email Assistant Workflow</DialogTitle>
+                      <DialogDescription>
+                        A visual guide to using the Email Assistant
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-4">
+                      <img 
+                        src="/email_assist_workflow.png" 
+                        alt="Email Assistant Workflow"
+                        className="w-full rounded-lg shadow-lg"
+                      />
+                    </div>
+                  </motion.div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </AnimatePresence>
 
           <div className="grid grid-cols-1">
             <Tabs defaultValue="overview">

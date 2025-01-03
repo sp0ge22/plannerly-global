@@ -51,11 +51,13 @@ type OrgUser = {
 
 type AddTaskDialogProps = {
   addTask: (task: Omit<Task, 'id' | 'comments' | 'created_at'>) => Promise<boolean>
-  children: ReactNode
+  children?: ReactNode
   openAIDirectly?: boolean
+  forceOpen?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export function AddTaskDialog({ addTask, children, openAIDirectly = false }: AddTaskDialogProps) {
+export function AddTaskDialog({ addTask, children, openAIDirectly = false, forceOpen, onOpenChange }: AddTaskDialogProps) {
   const router = useRouter()
   const [newTask, setNewTask] = useState<Omit<Task, 'id' | 'comments' | 'created_at'>>({
     title: '',
@@ -82,6 +84,37 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
   const [showSuggestionDialog, setShowSuggestionDialog] = useState(false)
   const [buttonVariant, setButtonVariant] = useState<"neutral" | "loading" | "error" | "success">("neutral")
+
+  // Handle forced open state from parent
+  useEffect(() => {
+    if (forceOpen !== undefined) {
+      if (openAIDirectly) {
+        setIsAddingTaskWithAI(forceOpen)
+        setIsOpen(false)
+      } else {
+        setIsOpen(forceOpen)
+        setIsAddingTaskWithAI(false)
+      }
+    }
+  }, [forceOpen, openAIDirectly])
+
+  // Handle open state changes
+  const handleOpenChange = (open: boolean) => {
+    if (openAIDirectly) {
+      setIsAddingTaskWithAI(open)
+    } else {
+      setIsOpen(open)
+    }
+    if (!open) {
+      // Reset all dialog states when closing
+      setShowSuggestionDialog(false)
+      setIsAddingTaskWithAI(false)
+      setIsOpen(false)
+    }
+    if (onOpenChange) {
+      onOpenChange(open)
+    }
+  }
 
   useEffect(() => {
     if (isOpen || isAddingTaskWithAI) {
@@ -429,386 +462,390 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
     setShowSuggestionDialog(false)
     if (useAI) {
       setIsAddingTaskWithAI(true)
+      setIsOpen(false)
     } else {
-      setIsAddingPrompt(true)
+      setIsOpen(true)
+      setIsAddingTaskWithAI(false)
     }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <div onClick={(e) => {
-          e.preventDefault();
-          if (openAIDirectly) {
-            setIsAddingTaskWithAI(true);
-          } else {
-            setShowSuggestionDialog(true);
-          }
-        }}>
-          {children}
-        </div>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[800px] max-h-[95vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Add New Task</DialogTitle>
-          <DialogDescription className="text-gray-500">
-            Create a new task and add it to your dashboard.
-          </DialogDescription>
-        </DialogHeader>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-4 py-4"
-        >
-          <div className="space-y-2">
-            <Label htmlFor="tenant-select" className="text-sm font-medium">Organization</Label>
-            <Select
-              value={newTask.tenant_id}
-              onValueChange={(value) => setNewTask({ ...newTask, tenant_id: value })}
-            >
-              <SelectTrigger id="tenant-select" className="w-full">
-                <SelectValue placeholder="Select organization">
-                  {newTask.tenant_id && (
-                    <div className="flex items-center space-x-2">
-                      <Avatar className="h-5 w-5">
-                        <AvatarImage 
-                          src={tenants.find(t => t.id === newTask.tenant_id)?.avatar_url ?? undefined}
-                        />
-                        <AvatarFallback>
-                          {(tenants.find(t => t.id === newTask.tenant_id)?.name || '??').slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex items-center justify-between flex-1 min-w-0">
-                        <span className="truncate">{tenants.find(t => t.id === newTask.tenant_id)?.name}</span>
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
-                          {tenants.find(t => t.id === newTask.tenant_id)?.is_owner && (
-                            <>
-                              <Crown className="w-3 h-3 text-yellow-500" />
-                              Owner
-                            </>
-                          )}
-                          {tenants.find(t => t.id === newTask.tenant_id)?.is_admin && !tenants.find(t => t.id === newTask.tenant_id)?.is_owner && (
-                            <>
-                              <Shield className="w-3 h-3 text-blue-500" />
-                              Admin
-                            </>
-                          )}
-                          {!tenants.find(t => t.id === newTask.tenant_id)?.is_owner && !tenants.find(t => t.id === newTask.tenant_id)?.is_admin && (
-                            <>
-                              <User className="w-3 h-3" />
-                              Member
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {tenants.map((tenant) => (
-                  <SelectItem key={tenant.id} value={tenant.id}>
-                    <div className="flex items-center space-x-2">
-                      <Avatar className="h-5 w-5">
-                        <AvatarImage src={tenant.avatar_url ?? undefined} />
-                        <AvatarFallback>
-                          {tenant.name.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex items-center justify-between flex-1 min-w-0">
-                        <span className="truncate">{tenant.name}</span>
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
-                          {tenant.is_owner && (
-                            <>
-                              <Crown className="w-3 h-3 text-yellow-500" />
-                              Owner
-                            </>
-                          )}
-                          {tenant.is_admin && !tenant.is_owner && (
-                            <>
-                              <Shield className="w-3 h-3 text-blue-500" />
-                              Admin
-                            </>
-                          )}
-                          {!tenant.is_owner && !tenant.is_admin && (
-                            <>
-                              <User className="w-3 h-3" />
-                              Member
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <>
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+        <DialogTrigger asChild>
+          <div onClick={(e) => {
+            e.preventDefault();
+            if (openAIDirectly) {
+              setIsAddingTaskWithAI(true);
+            } else {
+              setShowSuggestionDialog(true);
+            }
+          }}>
+            {children}
           </div>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-[800px] max-h-[95vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">Add New Task</DialogTitle>
+            <DialogDescription className="text-gray-500">
+              Create a new task and add it to your dashboard.
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="space-y-2">
-            <Label htmlFor="new-title" className="text-sm font-medium">Title</Label>
-            <Input
-              id="new-title"
-              value={newTask.title}
-              onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-              placeholder="Enter task title..."
-              className="w-full"
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={async () => {
-                if (!newTask.body.trim()) {
-                  toast({
-                    title: "No content to summarize",
-                    description: "Please enter description text before generating a title.",
-                    variant: "destructive",
-                  })
-                  return
-                }
-                setIsGeneratingTitle(true)
-                try {
-                  const response = await fetch('/api/summarize-title', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: newTask.body }),
-                  })
-                  if (!response.ok) throw new Error('Failed to summarize')
-                  const data = await response.json()
-                  setNewTask({ ...newTask, title: data.summary })
-                  toast({
-                    title: "Title generated",
-                    description: "Task title has been generated from description.",
-                  })
-                } catch (error) {
-                  console.error('Error generating title:', error)
-                  toast({
-                    title: "Title generation failed",
-                    description: "There was an error generating the title. Please try again.",
-                    variant: "destructive",
-                  })
-                } finally {
-                  setIsGeneratingTitle(false)
-                }
-              }}
-              disabled={isGeneratingTitle || !newTask.body.trim()}
-              className="transition-all duration-200 bg-secondary hover:bg-primary hover:text-secondary"
-            >
-              {isGeneratingTitle ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  <span>Generating...</span>
-                </>
-              ) : (
-                <>
-                  <Wand2 className="w-4 h-4 mr-2" />
-                  <span>Generate Title</span>
-                </>
-              )}
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="new-body" className="text-sm font-medium">Description</Label>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleSummarize}
-                disabled={isSummarizingDescription || !newTask.body.trim()}
-                className="transition-all duration-200 bg-secondary hover:bg-primary hover:text-secondary"
-              >
-                {isSummarizingDescription ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    <span>Summarizing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="w-4 h-4 mr-2" />
-                    <span>Summarize Description</span>
-                  </>
-                )}
-              </Button>
-            </div>
-            <Textarea
-              id="new-body"
-              value={newTask.body}
-              onChange={(e) => setNewTask({ ...newTask, body: e.target.value })}
-              className="min-h-[100px] max-h-[200px] resize-y"
-              placeholder="Enter task details here..."
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4 py-4"
+          >
             <div className="space-y-2">
-              <Label htmlFor="new-status" className="text-sm font-medium">Status</Label>
+              <Label htmlFor="tenant-select" className="text-sm font-medium">Organization</Label>
               <Select
-                value={newTask.status}
-                onValueChange={(value: Task['status']) => setNewTask({ ...newTask, status: value })}
+                value={newTask.tenant_id}
+                onValueChange={(value) => setNewTask({ ...newTask, tenant_id: value })}
               >
-                <SelectTrigger id="new-status" className="w-full">
-                  <SelectValue placeholder="Select status" />
+                <SelectTrigger id="tenant-select" className="w-full">
+                  <SelectValue placeholder="Select organization">
+                    {newTask.tenant_id && (
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage 
+                            src={tenants.find(t => t.id === newTask.tenant_id)?.avatar_url ?? undefined}
+                          />
+                          <AvatarFallback>
+                            {(tenants.find(t => t.id === newTask.tenant_id)?.name || '??').slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex items-center justify-between flex-1 min-w-0">
+                          <span className="truncate">{tenants.find(t => t.id === newTask.tenant_id)?.name}</span>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                            {tenants.find(t => t.id === newTask.tenant_id)?.is_owner && (
+                              <>
+                                <Crown className="w-3 h-3 text-yellow-500" />
+                                Owner
+                              </>
+                            )}
+                            {tenants.find(t => t.id === newTask.tenant_id)?.is_admin && !tenants.find(t => t.id === newTask.tenant_id)?.is_owner && (
+                              <>
+                                <Shield className="w-3 h-3 text-blue-500" />
+                                Admin
+                              </>
+                            )}
+                            {!tenants.find(t => t.id === newTask.tenant_id)?.is_owner && !tenants.find(t => t.id === newTask.tenant_id)?.is_admin && (
+                              <>
+                                <User className="w-3 h-3" />
+                                Member
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="To Do">To Do</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="new-priority" className="text-sm font-medium">Priority</Label>
-              <Select
-                value={newTask.priority}
-                onValueChange={(value: Task['priority']) => setNewTask({ ...newTask, priority: value })}
-              >
-                <SelectTrigger id="new-priority" className="w-full">
-                  <SelectValue placeholder="Select priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  {['Low', 'Medium', 'High'].map((priority) => (
-                    <SelectItem key={priority} value={priority}>
-                      <div className="flex items-center">
-                        <Badge variant="secondary" className={`mr-2 ${getPriorityColor(priority as Task['priority'])}`}>
-                          {priority}
-                        </Badge>
+                  {tenants.map((tenant) => (
+                    <SelectItem key={tenant.id} value={tenant.id}>
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={tenant.avatar_url ?? undefined} />
+                          <AvatarFallback>
+                            {tenant.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex items-center justify-between flex-1 min-w-0">
+                          <span className="truncate">{tenant.name}</span>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                            {tenant.is_owner && (
+                              <>
+                                <Crown className="w-3 h-3 text-yellow-500" />
+                                Owner
+                              </>
+                            )}
+                            {tenant.is_admin && !tenant.is_owner && (
+                              <>
+                                <Shield className="w-3 h-3 text-blue-500" />
+                                Admin
+                              </>
+                            )}
+                            {!tenant.is_owner && !tenant.is_admin && (
+                              <>
+                                <User className="w-3 h-3" />
+                                Member
+                              </>
+                            )}
+                          </span>
+                        </div>
                       </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="new-assignee" className="text-sm font-medium">Assignee</Label>
-            <Select
-              value={newTask.assignee}
-              onValueChange={(value: string) => setNewTask({ ...newTask, assignee: value })}
-            >
-              <SelectTrigger id="new-assignee" className="w-full">
-                <SelectValue placeholder="Select assignee">
-                  {newTask.assignee && (
-                    <div className="flex items-center space-x-2">
-                      <Avatar className="h-5 w-5">
-                        <AvatarImage 
-                          src={orgUsers.find(u => 
-                            (u.profile.name === newTask.assignee || 
-                             u.profile.email === newTask.assignee ||
-                             u.user_id === newTask.assignee)
-                          )?.profile.avatar_url ?? undefined} 
-                        />
-                        <AvatarFallback>
-                          {newTask.assignee.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span>{newTask.assignee}</span>
-                    </div>
-                  )}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {orgUsers.map((user) => (
-                  <SelectItem 
-                    key={user.user_id} 
-                    value={user.profile.name || user.profile.email || user.user_id}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <Avatar className="h-5 w-5">
-                        <AvatarImage src={user.profile.avatar_url ?? undefined} />
-                        <AvatarFallback>
-                          {(user.profile.name || user.profile.email || user.user_id)
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span>
-                        {user.profile.name || user.profile.email || user.user_id}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-title" className="text-sm font-medium">Title</Label>
+              <Input
+                id="new-title"
+                value={newTask.title}
+                onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                placeholder="Enter task title..."
+                className="w-full"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={async () => {
+                  if (!newTask.body.trim()) {
+                    toast({
+                      title: "No content to summarize",
+                      description: "Please enter description text before generating a title.",
+                      variant: "destructive",
+                    })
+                    return
+                  }
+                  setIsGeneratingTitle(true)
+                  try {
+                    const response = await fetch('/api/summarize-title', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ text: newTask.body }),
+                    })
+                    if (!response.ok) throw new Error('Failed to summarize')
+                    const data = await response.json()
+                    setNewTask({ ...newTask, title: data.summary })
+                    toast({
+                      title: "Title generated",
+                      description: "Task title has been generated from description.",
+                    })
+                  } catch (error) {
+                    console.error('Error generating title:', error)
+                    toast({
+                      title: "Title generation failed",
+                      description: "There was an error generating the title. Please try again.",
+                      variant: "destructive",
+                    })
+                  } finally {
+                    setIsGeneratingTitle(false)
+                  }
+                }}
+                disabled={isGeneratingTitle || !newTask.body.trim()}
+                className="transition-all duration-200 bg-secondary hover:bg-primary hover:text-secondary"
+              >
+                {isGeneratingTitle ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-4 h-4 mr-2" />
+                    <span>Generate Title</span>
+                  </>
+                )}
+              </Button>
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="due-date" className="text-sm font-medium">Due Date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="new-body" className="text-sm font-medium">Description</Label>
                 <Button
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal"
-                  id="due-date"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleSummarize}
+                  disabled={isSummarizingDescription || !newTask.body.trim()}
+                  className="transition-all duration-200 bg-secondary hover:bg-primary hover:text-secondary"
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {newTask.due ? format(new Date(newTask.due), "PPP") : <span>Set due date</span>}
+                  {isSummarizingDescription ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      <span>Summarizing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="w-4 h-4 mr-2" />
+                      <span>Summarize Description</span>
+                    </>
+                  )}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={newTask.due ? new Date(newTask.due) : undefined}
-                  onSelect={(date) => {
-                    setNewTask({ 
-                      ...newTask, 
-                      due: date ? date.toISOString() : null 
-                    });
-                    // Close the popover after selection
-                    const popoverElement = document.querySelector('[data-radix-popper-content-wrapper]');
-                    if (popoverElement) {
-                      const closeButton = popoverElement.querySelector('[aria-label="Close"]');
-                      if (closeButton instanceof HTMLElement) {
-                        closeButton.click();
-                      }
-                    }
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        </motion.div>
+              </div>
+              <Textarea
+                id="new-body"
+                value={newTask.body}
+                onChange={(e) => setNewTask({ ...newTask, body: e.target.value })}
+                className="min-h-[100px] max-h-[200px] resize-y"
+                placeholder="Enter task details here..."
+              />
+            </div>
 
-        <DialogFooter className="flex items-center justify-between mt-6">
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setIsOpen(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleClearForm}
-              disabled={isSubmitting}
-            >
-              Clear Form
-            </Button>
-          </div>
-          <Button
-            onClick={handleAddTask}
-            disabled={isSubmitting || !newTask.title.trim()}
-            className="min-w-[120px]"
-          >
-            {isSubmitting ? (
-              <div className="flex items-center space-x-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Adding...</span>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-status" className="text-sm font-medium">Status</Label>
+                <Select
+                  value={newTask.status}
+                  onValueChange={(value: Task['status']) => setNewTask({ ...newTask, status: value })}
+                >
+                  <SelectTrigger id="new-status" className="w-full">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="To Do">To Do</SelectItem>
+                    <SelectItem value="In Progress">In Progress</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            ) : (
-              <div className="flex items-center space-x-2">
-                <Plus className="w-4 h-4" />
-                <span>Add Task</span>
+
+              <div className="space-y-2">
+                <Label htmlFor="new-priority" className="text-sm font-medium">Priority</Label>
+                <Select
+                  value={newTask.priority}
+                  onValueChange={(value: Task['priority']) => setNewTask({ ...newTask, priority: value })}
+                >
+                  <SelectTrigger id="new-priority" className="w-full">
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['Low', 'Medium', 'High'].map((priority) => (
+                      <SelectItem key={priority} value={priority}>
+                        <div className="flex items-center">
+                          <Badge variant="secondary" className={`mr-2 ${getPriorityColor(priority as Task['priority'])}`}>
+                            {priority}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-assignee" className="text-sm font-medium">Assignee</Label>
+              <Select
+                value={newTask.assignee}
+                onValueChange={(value: string) => setNewTask({ ...newTask, assignee: value })}
+              >
+                <SelectTrigger id="new-assignee" className="w-full">
+                  <SelectValue placeholder="Select assignee">
+                    {newTask.assignee && (
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage 
+                            src={orgUsers.find(u => 
+                              (u.profile.name === newTask.assignee || 
+                               u.profile.email === newTask.assignee ||
+                               u.user_id === newTask.assignee)
+                            )?.profile.avatar_url ?? undefined} 
+                          />
+                          <AvatarFallback>
+                            {newTask.assignee.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{newTask.assignee}</span>
+                      </div>
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {orgUsers.map((user) => (
+                    <SelectItem 
+                      key={user.user_id} 
+                      value={user.profile.name || user.profile.email || user.user_id}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={user.profile.avatar_url ?? undefined} />
+                          <AvatarFallback>
+                            {(user.profile.name || user.profile.email || user.user_id)
+                              .slice(0, 2)
+                              .toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>
+                          {user.profile.name || user.profile.email || user.user_id}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="due-date" className="text-sm font-medium">Due Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                    id="due-date"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {newTask.due ? format(new Date(newTask.due), "PPP") : <span>Set due date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={newTask.due ? new Date(newTask.due) : undefined}
+                    onSelect={(date) => {
+                      setNewTask({ 
+                        ...newTask, 
+                        due: date ? date.toISOString() : null 
+                      });
+                      // Close the popover after selection
+                      const popoverElement = document.querySelector('[data-radix-popper-content-wrapper]');
+                      if (popoverElement) {
+                        const closeButton = popoverElement.querySelector('[aria-label="Close"]');
+                        if (closeButton instanceof HTMLElement) {
+                          closeButton.click();
+                        }
+                      }
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </motion.div>
+
+          <DialogFooter className="flex items-center justify-between mt-6">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsOpen(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleClearForm}
+                disabled={isSubmitting}
+              >
+                Clear Form
+              </Button>
+            </div>
+            <Button
+              onClick={handleAddTask}
+              disabled={isSubmitting || !newTask.title.trim()}
+              className="min-w-[120px]"
+            >
+              {isSubmitting ? (
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Adding...</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <Plus className="w-4 h-4" />
+                  <span>Add Task</span>
+                </div>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showSuggestionDialog} onOpenChange={setShowSuggestionDialog}>
         <DialogContent className="sm:max-w-[500px]">
@@ -881,7 +918,12 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAddingTaskWithAI} onOpenChange={setIsAddingTaskWithAI}>
+      <Dialog open={isAddingTaskWithAI} onOpenChange={(open) => {
+        setIsAddingTaskWithAI(open)
+        if (!open) {
+          handleOpenChange(false)
+        }
+      }}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle className="text-2xl">Create Task with AI</DialogTitle>
@@ -1045,6 +1087,6 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false }: Add
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Dialog>
+    </>
   )
 }

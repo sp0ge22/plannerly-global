@@ -16,6 +16,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreVertical } from 'lucide-react'
 import { LoadAndErrorButton } from '@/components/ui/loadbutton'
 import { AddPromptDialog } from '@/components/Prompts/AddPromptDialog'
+import { AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 type EmailType = 'response' | 'rewrite'
 type Tenant = {
@@ -83,6 +85,7 @@ export default function EmailAssistantPage() {
   const [isGeneratingEdit, setIsGeneratingEdit] = useState(false)
   const [buttonVariant, setButtonVariant] = useState<"neutral" | "loading" | "error" | "success">("neutral")
   const [showSuggestionDialog, setShowSuggestionDialog] = useState(false)
+  const [showWorkflow, setShowWorkflow] = useState(false)
   
   const { toast } = useToast()
   const supabase = createClientComponentClient()
@@ -388,7 +391,7 @@ export default function EmailAssistantPage() {
   }
 
   const handleAddPromptClick = () => {
-    setIsAddingPromptWithAI(true)
+    setShowSuggestionDialog(true)
   }
 
   const editPromptWithAI = async () => {
@@ -451,6 +454,10 @@ export default function EmailAssistantPage() {
               <h1 className="text-3xl font-bold">Email Assistant</h1>
             </div>
             <div className="flex items-center space-x-2">
+              <Button variant="outline" onClick={() => setShowWorkflow(true)}>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Quick Start Guide
+              </Button>
               <Button variant="ghost" onClick={() => window.location.href = '/help/email-assistant'}>
                 <MessageSquare className="w-4 h-4 mr-2" />
                 Help & Guides
@@ -459,16 +466,6 @@ export default function EmailAssistantPage() {
                 <Library className="w-4 h-4 mr-2" />
                 Prompt Library
               </Button>
-              <Button variant="outline" onClick={() => {
-                setNewPrompt({
-                  ...newPrompt,
-                  type: mode
-                })
-                setIsAddingPromptWithAI(true)
-              }}>
-                <Sparkles className="w-4 h-4 mr-2" />
-                Add Prompt with AI
-              </Button>
               <Button onClick={handleAddPromptClick}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Prompt
@@ -476,9 +473,37 @@ export default function EmailAssistantPage() {
             </div>
           </div>
 
+          <AnimatePresence>
+            {showWorkflow && (
+              <Dialog open={showWorkflow} onOpenChange={setShowWorkflow}>
+                <DialogContent className="max-w-4xl">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <DialogHeader>
+                      <DialogTitle>Email Assistant Workflow</DialogTitle>
+                      <DialogDescription>
+                        A visual guide to using the Email Assistant
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-4">
+                      <img 
+                        src="/email_assist_workflow.png" 
+                        alt="Email Assistant Workflow"
+                        className="w-full rounded-lg shadow-lg"
+                      />
+                    </div>
+                  </motion.div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </AnimatePresence>
+
           <Card>
             <CardHeader>
-              <CardTitle>Email Assistant</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex space-x-4">
@@ -735,6 +760,77 @@ export default function EmailAssistantPage() {
           </Card>
         </div>
       </main>
+
+      <Dialog open={showSuggestionDialog} onOpenChange={setShowSuggestionDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-full bg-primary/10">
+                <Sparkles className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl">Try AI-Assisted Creation?</DialogTitle>
+                <DialogDescription className="text-base">
+                  Let AI help you create prompts more efficiently
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="py-6">
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <Wand2 className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Smart Prompt Generation</h4>
+                  <p className="text-sm text-muted-foreground">
+                    AI helps you create effective prompts based on your description
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <RefreshCw className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Iterative Refinement</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Easily refine and improve your prompts with AI suggestions
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                  <MessageSquare className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium mb-1">Natural Language Input</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Just describe what you need, and AI will structure it properly
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex justify-end gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => {
+                setShowSuggestionDialog(false)
+                setIsAddingPrompt(true)
+              }}>
+              <Edit2 className="w-4 h-4 mr-2" />
+              I'll create it manually
+            </Button>
+            <Button onClick={() => {
+                setShowSuggestionDialog(false)
+                setIsAddingPromptWithAI(true)
+              }} className="gap-2">
+              <Sparkles className="w-4 h-4" />
+              Use AI Assistant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AddPromptDialog
         isOpen={isAddingPromptWithAI}

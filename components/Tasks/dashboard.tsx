@@ -9,13 +9,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Loader2, Filter, RefreshCcw, Calendar, Archive, ArchiveRestore, Crown, Shield, User, Edit2, Sparkles } from 'lucide-react'
+import { Plus, Search, Loader2, Filter, RefreshCcw, Calendar, Archive, ArchiveRestore, Crown, Shield, User, Edit2, Sparkles, Library, Wand2, MessageSquare } from 'lucide-react'
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { sortTasks } from './TaskGrid'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { ArchivedTaskCard } from './ArchivedTaskCard'
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 
 export function DashboardComponent() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -29,6 +30,9 @@ export function DashboardComponent() {
   const [currentDate] = useState(new Date())
   const supabase = createClientComponentClient()
   const [showArchived, setShowArchived] = useState(false)
+  const [showAddTaskSuggestionDialog, setShowAddTaskSuggestionDialog] = useState(false)
+  const [isAddingTaskWithAI, setIsAddingTaskWithAI] = useState(false)
+  const [isAddingTask, setIsAddingTask] = useState(false)
 
   const fetchTasks = useCallback(async () => {
     setIsLoading(true)
@@ -366,6 +370,21 @@ export function DashboardComponent() {
       return a.name.localeCompare(b.name)
     })
 
+  const handleAddTaskClick = () => {
+    setShowAddTaskSuggestionDialog(true)
+  }
+
+  const handleTaskSuggestionResponse = (useAI: boolean) => {
+    setShowAddTaskSuggestionDialog(false)
+    if (useAI) {
+      setIsAddingTaskWithAI(true)
+      setIsAddingTask(false)
+    } else {
+      setIsAddingTask(true)
+      setIsAddingTaskWithAI(false)
+    }
+  }
+
   return (
     <motion.main
       initial={{ opacity: 0, y: 20 }}
@@ -416,17 +435,97 @@ export function DashboardComponent() {
               <RefreshCcw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <AddTaskDialog addTask={addTask}>
-              <Button size="sm">
-                <Edit2 className="w-4 h-4 mr-1" />
-                Add Task Manually
-              </Button>
+            <Button onClick={handleAddTaskClick}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Task
+            </Button>
+            <Dialog open={showAddTaskSuggestionDialog} onOpenChange={setShowAddTaskSuggestionDialog}>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <Sparkles className="w-8 h-8 text-primary" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-xl">Try AI-Assisted Creation?</DialogTitle>
+                      <DialogDescription className="text-base">
+                        Let AI help you create tasks more efficiently
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+                <div className="py-6">
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                        <Wand2 className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium mb-1">Smart Task Generation</h4>
+                        <p className="text-sm text-muted-foreground">
+                          AI helps you create well-structured tasks based on your description
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                        <RefreshCcw className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium mb-1">Automatic Details</h4>
+                        <p className="text-sm text-muted-foreground">
+                          AI suggests appropriate fields like priority, due dates, and assignees
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="p-1.5 rounded-full bg-primary/10 mt-0.5">
+                        <MessageSquare className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium mb-1">Natural Language Input</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Just describe what you need, and AI will structure it properly
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter className="flex justify-end gap-2 sm:gap-2">
+                  <Button variant="outline" onClick={() => handleTaskSuggestionResponse(false)}>
+                    <Edit2 className="w-4 h-4 mr-2" />
+                    I'll create it manually
+                  </Button>
+                  <Button onClick={() => handleTaskSuggestionResponse(true)} className="gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Use AI Assistant
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <AddTaskDialog 
+              addTask={addTask} 
+              openAIDirectly={false}
+              forceOpen={isAddingTask}
+              onOpenChange={(open) => {
+                setIsAddingTask(open)
+                if (!open) setIsAddingTaskWithAI(false)
+              }}
+            >
+              <div className="hidden" />
             </AddTaskDialog>
-            <AddTaskDialog addTask={addTask} openAIDirectly={true}>
-              <Button size="sm" variant="secondary">
-                <Sparkles className="w-4 h-4 mr-1" />
-                Add Task with AI
-              </Button>
+
+            <AddTaskDialog 
+              addTask={addTask} 
+              openAIDirectly={true}
+              forceOpen={isAddingTaskWithAI}
+              onOpenChange={(open) => {
+                setIsAddingTaskWithAI(open)
+                if (!open) setIsAddingTask(false)
+              }}
+            >
+              <div className="hidden" />
             </AddTaskDialog>
           </div>
         </div>

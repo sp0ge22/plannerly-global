@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     ).join(', ')
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
           Return a JSON object with:
           {
             "title": "Brief, clear task title",
-            "body": "Detailed task description",
+            "body": "Detailed task description. Do not include the assignees name in the body. Use formatting to make it more readable.",
             "assignee": "Name from available assignees or 'incomplete'",
             "priority": "Priority level or 'incomplete'",
             "status": "Status or 'incomplete'",
