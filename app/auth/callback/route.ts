@@ -60,12 +60,27 @@ export async function GET(request: NextRequest) {
 
     // If it's a brand-new signup or if `?redirect=verify`, go to success
     if (type === 'signup' || redirect === 'verify') {
-      log('Signup verification detected, redirecting to success page')
-      return NextResponse.redirect(new URL('/auth/verify-success', request.url))
+      log('Signup verification detected', { 
+        type,
+        redirect,
+        condition1: type === 'signup',
+        condition2: redirect === 'verify',
+        redirectUrl: new URL('/auth/verify-success', request.url).toString()
+      })
+      const redirectResponse = NextResponse.redirect(new URL('/auth/verify-success', request.url))
+      log('Created redirect response', { 
+        status: redirectResponse.status,
+        headers: Object.fromEntries(redirectResponse.headers.entries())
+      })
+      return redirectResponse
     }
 
     // Otherwise, it's a normal login (or password recovery, etc.)
-    log('Normal login flow, redirecting to /settings')
+    log('Normal login flow detected', { 
+      type,
+      redirect,
+      redirectUrl: new URL('/settings', request.url).toString()
+    })
     return NextResponse.redirect(new URL('/settings', request.url))
   } catch (error) {
     log('Unhandled error in auth callback', { error })

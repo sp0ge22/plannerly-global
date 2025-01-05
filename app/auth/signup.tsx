@@ -66,7 +66,7 @@ export function SignUp({
         throw new Error('Password must be at least 8 characters long')
       }
 
-      const redirectUrl = `${window.location.origin}/auth/callback`
+      const redirectUrl = `${window.location.origin}/auth/callback?redirect=verify`
       
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
