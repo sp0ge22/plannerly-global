@@ -71,7 +71,8 @@ export async function middleware(req: NextRequest) {
         '/auth/callback',
         '/auth/verify-success',
         '/auth/login',
-        '/auth/signup'
+        '/auth/signup',
+        '/auth/verify'
       ]
       const isPublicPath = publicPaths.includes(req.nextUrl.pathname)
 
