@@ -10,6 +10,7 @@ import { Loader2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 
 interface SignUpProps {
   email: string
@@ -50,6 +51,7 @@ export function SignUp({
   const { toast } = useToast()
   const [signupMode, setSignupMode] = useState<'create' | 'join'>('create')
   const [organizationId, setOrganizationId] = useState('')
+  const router = useRouter()
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -148,6 +150,9 @@ export function SignUp({
         title: "Check your email",
         description: "We've sent you a confirmation link to complete your signup.",
       })
+
+      // Redirect to verify page with email
+      router.push(`/auth/verify?email=${encodeURIComponent(email)}`)
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An error occurred during signup'
       toast({
