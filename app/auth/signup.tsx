@@ -7,7 +7,6 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { useToast } from "@/hooks/use-toast"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Loader2 } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
@@ -190,8 +189,8 @@ export function SignUp({
         </AnimatePresence>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <Tabs defaultValue="create" onValueChange={(value) => setSignupMode(value as 'create' | 'join')}>
-          <TabsList className="relative grid w-full grid-cols-2 p-1 bg-muted rounded-lg h-10">
+        <div className="relative w-full">
+          <div className="relative grid w-full grid-cols-2 p-1 bg-muted/30 rounded-lg h-10">
             <motion.div
               className="absolute inset-0 z-10 m-1 w-[calc(50%-0.5rem)]"
               initial={false}
@@ -200,22 +199,26 @@ export function SignUp({
               }}
               transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
             >
-              <div className="h-full bg-background rounded-md shadow-sm" />
+              <div className="h-full bg-black rounded-md shadow-sm" />
             </motion.div>
-            <TabsTrigger 
-              value="create" 
-              className="relative z-20 data-[state=active]:text-foreground/90 data-[state=active]:shadow-none"
+            <button
+              type="button"
+              onClick={() => setSignupMode('create')}
+              className={`relative z-20 transition-colors duration-200 rounded-md
+                ${signupMode === 'create' ? 'text-white' : 'text-foreground/70 hover:text-foreground/90'}`}
             >
               Create Organization
-            </TabsTrigger>
-            <TabsTrigger 
-              value="join" 
-              className="relative z-20 data-[state=active]:text-foreground/90 data-[state=active]:shadow-none"
+            </button>
+            <button
+              type="button"
+              onClick={() => setSignupMode('join')}
+              className={`relative z-20 transition-colors duration-200 rounded-md
+                ${signupMode === 'join' ? 'text-white' : 'text-foreground/70 hover:text-foreground/90'}`}
             >
               Join Organization
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+            </button>
+          </div>
+        </div>
 
         <AnimatePresence mode="wait">
           <motion.form
