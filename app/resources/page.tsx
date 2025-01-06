@@ -620,19 +620,50 @@ export default function ResourcesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Organizations</SelectItem>
-                    {tenants.map((tenant) => (
-                      <SelectItem key={tenant.id} value={tenant.id}>
-                        <div className="flex items-center space-x-2">
-                          <Avatar className="h-5 w-5">
-                            <AvatarImage src={tenant.avatar_url || undefined} />
-                            <AvatarFallback>
-                              {tenant.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span>{tenant.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
+                    {tenants
+                      .sort((a, b) => {
+                        // Sort by role priority: owner > admin > member
+                        if (a.is_owner && !b.is_owner) return -1;
+                        if (!a.is_owner && b.is_owner) return 1;
+                        if (a.is_admin && !b.is_admin) return -1;
+                        if (!a.is_admin && b.is_admin) return 1;
+                        return a.name.localeCompare(b.name);
+                      })
+                      .map((tenant) => (
+                        <SelectItem key={tenant.id} value={tenant.id}>
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center space-x-2 flex-1 min-w-0">
+                              <Avatar className="h-5 w-5 flex-shrink-0">
+                                <AvatarImage src={tenant.avatar_url || undefined} />
+                                <AvatarFallback>
+                                  {tenant.name.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="truncate">{tenant.name}</span>
+                            </div>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-4 flex-shrink-0">
+                              {tenant.is_owner && (
+                                <>
+                                  <Crown className="w-3 h-3 text-yellow-500" />
+                                  Owner
+                                </>
+                              )}
+                              {tenant.is_admin && !tenant.is_owner && (
+                                <>
+                                  <Shield className="w-3 h-3 text-blue-500" />
+                                  Admin
+                                </>
+                              )}
+                              {!tenant.is_owner && !tenant.is_admin && (
+                                <>
+                                  <User className="w-3 h-3" />
+                                  Member
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -879,36 +910,36 @@ export default function ResourcesPage() {
                   <SelectContent>
                     {tenants.map((tenant) => (
                       <SelectItem key={tenant.id} value={tenant.id}>
-                        <div className="flex items-center space-x-2">
-                          <Avatar className="h-5 w-5">
-                            <AvatarImage src={tenant.avatar_url || undefined} />
-                            <AvatarFallback>
-                              {tenant.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex items-center justify-between flex-1 min-w-0">
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center space-x-2 flex-1 min-w-0">
+                            <Avatar className="h-5 w-5 flex-shrink-0">
+                              <AvatarImage src={tenant.avatar_url || undefined} />
+                              <AvatarFallback>
+                                {tenant.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
                             <span className="truncate">{tenant.name}</span>
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
-                              {tenant.is_owner && (
-                                <>
-                                  <Crown className="w-3 h-3 text-yellow-500" />
-                                  Owner
-                                </>
-                              )}
-                              {tenant.is_admin && !tenant.is_owner && (
-                                <>
-                                  <Shield className="w-3 h-3 text-blue-500" />
-                                  Admin
-                                </>
-                              )}
-                              {!tenant.is_owner && !tenant.is_admin && (
-                                <>
-                                  <User className="w-3 h-3" />
-                                  Member
-                                </>
-                              )}
-                            </span>
                           </div>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2 flex-shrink-0">
+                            {tenant.is_owner && (
+                              <>
+                                <Crown className="w-3 h-3 text-yellow-500" />
+                                Owner
+                              </>
+                            )}
+                            {tenant.is_admin && !tenant.is_owner && (
+                              <>
+                                <Shield className="w-3 h-3 text-blue-500" />
+                                Admin
+                              </>
+                            )}
+                            {!tenant.is_owner && !tenant.is_admin && (
+                              <>
+                                <User className="w-3 h-3" />
+                                Member
+                              </>
+                            )}
+                          </span>
                         </div>
                       </SelectItem>
                     ))}
@@ -1378,36 +1409,36 @@ export default function ResourcesPage() {
                   <SelectContent>
                     {tenants.map((tenant) => (
                       <SelectItem key={tenant.id} value={tenant.id}>
-                        <div className="flex items-center space-x-2">
-                          <Avatar className="h-5 w-5">
-                            <AvatarImage src={tenant.avatar_url || undefined} />
-                            <AvatarFallback>
-                              {tenant.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex items-center justify-between flex-1 min-w-0">
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center space-x-2 flex-1 min-w-0">
+                            <Avatar className="h-5 w-5 flex-shrink-0">
+                              <AvatarImage src={tenant.avatar_url || undefined} />
+                              <AvatarFallback>
+                                {tenant.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
                             <span className="truncate">{tenant.name}</span>
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
-                              {tenant.is_owner && (
-                                <>
-                                  <Crown className="w-3 h-3 text-yellow-500" />
-                                  Owner
-                                </>
-                              )}
-                              {tenant.is_admin && !tenant.is_owner && (
-                                <>
-                                  <Shield className="w-3 h-3 text-blue-500" />
-                                  Admin
-                                </>
-                              )}
-                              {!tenant.is_owner && !tenant.is_admin && (
-                                <>
-                                  <User className="w-3 h-3" />
-                                  Member
-                                </>
-                              )}
-                            </span>
                           </div>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-4 flex-shrink-0">
+                            {tenant.is_owner && (
+                              <>
+                                <Crown className="w-3 h-3 text-yellow-500" />
+                                Owner
+                              </>
+                            )}
+                            {tenant.is_admin && !tenant.is_owner && (
+                              <>
+                                <Shield className="w-3 h-3 text-blue-500" />
+                                Admin
+                              </>
+                            )}
+                            {!tenant.is_owner && !tenant.is_admin && (
+                              <>
+                                <User className="w-3 h-3" />
+                                Member
+                              </>
+                            )}
+                          </span>
                         </div>
                       </SelectItem>
                     ))}

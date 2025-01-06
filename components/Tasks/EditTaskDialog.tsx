@@ -70,25 +70,25 @@ export function EditTaskDialog({ task, updateTask }: EditTaskDialogProps) {
 
   const handleSave = async () => {
     try {
+      // Ensure title is no longer than 30 characters before saving
+      const trimmedTitle = editingTask.title.slice(0, 30);
+      
       // Get the assignee's profile data
       const assigneeProfile = orgUsers.find(user => 
         user.profile.name === editingTask.assignee || 
         user.profile.email === editingTask.assignee
       )?.profile
 
-      // Create a new task object that carefully preserves all original data
+      // Create a new task object with trimmed title
       const updatedTask = {
-        ...task,  // Start with all original task data
-        // Only update the specific fields that were edited
-        title: editingTask.title,
+        ...task,
+        title: trimmedTitle, // Use trimmed title
         body: editingTask.body,
         status: editingTask.status,
         assignee: editingTask.assignee,
-        // If assignee changed, update the avatar URL, otherwise keep the original
         assignee_avatar_url: editingTask.assignee !== task.assignee 
           ? (assigneeProfile?.avatar_url ?? task.assignee_avatar_url)
           : task.assignee_avatar_url,
-        // Explicitly preserve these fields to ensure they're not lost
         tenant_id: task.tenant_id,
         tenant_name: task.tenant_name,
         tenant_avatar_url: task.tenant_avatar_url,
@@ -147,11 +147,17 @@ export function EditTaskDialog({ task, updateTask }: EditTaskDialogProps) {
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="title">
+              Title <span className="text-xs text-muted-foreground">({editingTask.title.length}/30)</span>
+            </Label>
             <Input
               id="title"
               value={editingTask.title}
-              onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })}
+              onChange={(e) => {
+                const value = e.target.value.slice(0, 30);
+                setEditingTask({ ...editingTask, title: value });
+              }}
+              maxLength={30}
             />
           </div>
           <div className="space-y-2">

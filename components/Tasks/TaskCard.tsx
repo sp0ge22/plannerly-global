@@ -230,7 +230,9 @@ export function TaskCard({
             addComment={addComment}
           >
             <div className="cursor-pointer">
-              <h3 className="font-semibold mb-2">{task.title}</h3>
+              <h3 className="font-semibold mb-2">
+                {task.title.slice(0, 30)}
+              </h3>
               <div className="flex flex-col space-y-2 mb-3">
                 <div className="flex items-center justify-between text-sm text-gray-600">
                   <span className="flex items-center space-x-2">

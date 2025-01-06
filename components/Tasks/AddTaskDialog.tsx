@@ -583,13 +583,19 @@ export function AddTaskDialog({ addTask, children, openAIDirectly = false, force
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="new-title" className="text-sm font-medium">Title</Label>
+              <Label htmlFor="new-title" className="text-sm font-medium">
+                Title <span className="text-xs text-muted-foreground">({newTask.title.length}/30)</span>
+              </Label>
               <Input
                 id="new-title"
                 value={newTask.title}
-                onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value.slice(0, 30);
+                  setNewTask({ ...newTask, title: value });
+                }}
                 placeholder="Enter task title..."
                 className="w-full"
+                maxLength={30}
               />
               <Button
                 variant="secondary"

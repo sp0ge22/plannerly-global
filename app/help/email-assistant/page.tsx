@@ -1165,7 +1165,7 @@ Keep it professional and solution-focused, without over-explaining.`
                           </h4>
                           <div className="mt-3 text-muted-foreground">
                             <p className="italic">
-                              "Hey Sally, when handling incoming emails about warranties, remember to:
+                              "When handling incoming emails about warranties, remember to:
                               - Always start with a courteous greeting and show empathy
                               - Ask for clear photos of the issue
                               - Request their purchase receipt

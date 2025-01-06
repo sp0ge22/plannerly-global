@@ -373,7 +373,9 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
           >
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
-                <DialogTitle className="text-2xl font-bold">{task.title}</DialogTitle>
+                <DialogTitle className="text-xl font-bold">
+                  {task.title.slice(0, 30)}
+                </DialogTitle>
                 <div className="flex items-center space-x-2">
                   <Select
                     value={task.priority}
@@ -675,7 +677,7 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
                   <div className="flex-1 w-full rounded-md border p-4 bg-gray-50 overflow-y-auto" 
                        style={{ maxHeight: 'calc(100vh - 400px)' }}>
                     <div className="prose prose-sm max-w-none whitespace-pre-wrap">
-                      {task.body}
+                      {formatTextWithLinks(task.body)}
                     </div>
                   </div>
                 </div>
