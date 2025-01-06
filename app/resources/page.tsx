@@ -651,102 +651,84 @@ export default function ResourcesPage() {
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 <p className="text-lg font-medium">Loading resources...</p>
               </motion.div>
-            ) : (
-              <>
-                {selectedCategory === 'all' ? (
-                  // Show all categories
-                  categories.map(category => {
-                    const categoryResources = filteredResources.filter(
-                      resource => resource.category_id === category.id
-                    )
-                    if (categoryResources.length === 0) return null
+            ) : filteredResources.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center justify-center h-64 space-y-4"
+              >
+                <div className="p-4 rounded-full bg-muted">
+                  <Library className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <div className="text-center space-y-2">
+                  <p className="text-lg font-medium">No resources found</p>
+                  <p className="text-sm text-muted-foreground max-w-sm">
+                    {searchQuery || selectedCategory !== 'all' || selectedTenant !== 'all'
+                      ? "Try adjusting your filters or search query to find what you're looking for."
+                      : "Get started by adding your first resource using the 'Add Resource' button above."}
+                  </p>
+                </div>
+              </motion.div>
+            ) : selectedCategory === 'all' ? (
+              // Show all categories
+              categories.map(category => {
+                const categoryResources = filteredResources.filter(
+                  resource => resource.category_id === category.id
+                )
+                if (categoryResources.length === 0) return null
 
-                    // Find the tenant for this category
-                    const tenant = tenants.find(t => t.id === category.tenant_id)
+                // Find the tenant for this category
+                const tenant = tenants.find(t => t.id === category.tenant_id)
 
-                    return (
-                      <motion.div
-                        key={category.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="space-y-4"
-                      >
-                        <div 
-                          className="flex items-center justify-between cursor-pointer group"
-                          onClick={() => {
-                            setEditingCategory(category);
-                            setIsEditCategoryDialogOpen(true);
-                          }}
-                        >
-                          <div className="flex items-center gap-3">
-                            {category.image_url ? (
-                              <img 
-                                src={category.image_url} 
-                                alt={category.name}
-                                className="w-6 h-6 object-cover rounded"
-                              />
-                            ) : (
-                              <Folder className="w-6 h-6 text-muted-foreground" />
-                            )}
-                            <div className="flex items-center gap-2">
-                              <h2 className="text-lg font-semibold group-hover:text-primary transition-colors">
-                                {category.name}
-                              </h2>
-                              <span className="text-muted-foreground text-sm">•</span>
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-5 w-5">
-                                  <AvatarImage 
-                                    src={tenant?.avatar_url || undefined}
-                                    alt={tenant?.name}
-                                  />
-                                  <AvatarFallback>
-                                    {tenant?.name.slice(0, 2).toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span className="text-sm text-muted-foreground">{tenant?.name}</span>
-                              </div>
-                            </div>
-                            <Pencil className="w-4 h-4 opacity-0 group-hover:opacity-50" />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {categoryResources.map((resource) => (
-                            <ResourceCard
-                              key={resource.id}
-                              resource={resource}
-                              onEdit={() => {
-                                setEditingResource(resource)
-                                setIsEditDialogOpen(true)
-                              }}
-                              onDelete={() => {
-                                setSelectedResource(resource)
-                                setIsDeleteDialogOpen(true)
-                              }}
-                              tenants={tenants}
-                            />
-                          ))}
-                        </div>
-                      </motion.div>
-                    )
-                  })
-                ) : (
-                  // Show selected category
+                return (
                   <motion.div
+                    key={category.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     className="space-y-4"
                   >
-                    <div className="flex items-center justify-between">
+                    <div 
+                      className="flex items-center justify-between cursor-pointer group"
+                      onClick={() => {
+                        setEditingCategory(category);
+                        setIsEditCategoryDialogOpen(true);
+                      }}
+                    >
                       <div className="flex items-center gap-3">
-                        <h2 className="text-lg font-semibold">
-                          {categories.find(c => c.id.toString() === selectedCategory)?.name}
-                        </h2>
+                        {category.image_url ? (
+                          <img 
+                            src={category.image_url} 
+                            alt={category.name}
+                            className="w-6 h-6 object-cover rounded"
+                          />
+                        ) : (
+                          <Folder className="w-6 h-6 text-muted-foreground" />
+                        )}
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-lg font-semibold group-hover:text-primary transition-colors">
+                            {category.name}
+                          </h2>
+                          <span className="text-muted-foreground text-sm">•</span>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage 
+                                src={tenant?.avatar_url || undefined}
+                                alt={tenant?.name}
+                              />
+                              <AvatarFallback>
+                                {tenant?.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm text-muted-foreground">{tenant?.name}</span>
+                          </div>
+                        </div>
+                        <Pencil className="w-4 h-4 opacity-0 group-hover:opacity-50" />
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filteredResources.map((resource) => (
+                      {categoryResources.map((resource) => (
                         <ResourceCard
                           key={resource.id}
                           resource={resource}
@@ -763,8 +745,41 @@ export default function ResourcesPage() {
                       ))}
                     </div>
                   </motion.div>
-                )}
-              </>
+                )
+              })
+            ) : (
+              // Show selected category
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-lg font-semibold">
+                      {categories.find(c => c.id.toString() === selectedCategory)?.name}
+                    </h2>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredResources.map((resource) => (
+                    <ResourceCard
+                      key={resource.id}
+                      resource={resource}
+                      onEdit={() => {
+                        setEditingResource(resource)
+                        setIsEditDialogOpen(true)
+                      }}
+                      onDelete={() => {
+                        setSelectedResource(resource)
+                        setIsDeleteDialogOpen(true)
+                      }}
+                      tenants={tenants}
+                    />
+                  ))}
+                </div>
+              </motion.div>
             )}
           </AnimatePresence>
         </div>

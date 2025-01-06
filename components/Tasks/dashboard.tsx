@@ -385,6 +385,12 @@ export function DashboardComponent() {
     }
   }
 
+  const hasNoTasks = filteredTasks.length === 0
+  const hasNoArchivedTasks = showArchived && filteredTasks.length === 0
+  const hasNoActiveTasks = !showArchived && statusColumns.every(status => 
+    filteredTasks.filter(task => task.status === status).length === 0
+  )
+
   return (
     <motion.main
       initial={{ opacity: 0, y: 20 }}
@@ -709,6 +715,31 @@ export function DashboardComponent() {
             >
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
               <p className="text-lg font-medium">Loading tasks...</p>
+            </motion.div>
+          ) : hasNoTasks ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center h-64 space-y-4 mt-6"
+            >
+              <div className="p-4 rounded-full bg-muted">
+                <Library className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <div className="text-center space-y-2">
+                <p className="text-lg font-medium">
+                  {hasNoArchivedTasks
+                    ? "No archived tasks found"
+                    : "No tasks found"}
+                </p>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  {hasNoArchivedTasks
+                    ? "There are no tasks in the archive. Archived tasks will appear here."
+                    : searchQuery || filterPriority !== 'all' || filterAssignee !== 'all' || filterTenant !== 'all'
+                    ? "Try adjusting your filters or search query to find what you're looking for."
+                    : "Get started by creating your first task using the 'Add Task' button above."}
+                </p>
+              </div>
             </motion.div>
           ) : showArchived ? (
             <motion.div
