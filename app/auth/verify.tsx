@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Loader2, CheckCircle } from 'lucide-react'
+import { Mail, CheckCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
@@ -16,10 +16,8 @@ export function Verify({ email, setMode }: VerifyProps) {
   const [isVerified, setIsVerified] = useState(false)
 
   useEffect(() => {
-    // Listen for verification complete message
     const handleMessage = (event: MessageEvent) => {
       if (event.data === 'verification-complete') {
-        // Close this tab since verification is complete
         window.close()
       }
     }
@@ -33,29 +31,26 @@ export function Verify({ email, setMode }: VerifyProps) {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         setIsVerified(true)
-        // Redirect to settings after a short delay
         setTimeout(() => {
           router.push('/settings')
         }, 2000)
       }
     }
 
-    // Check immediately
     checkVerification()
-
-    // Then check every 2 seconds
     const interval = setInterval(checkVerification, 2000)
-
-    // Cleanup interval on unmount
     return () => clearInterval(interval)
   }, [router, supabase.auth])
 
   if (isVerified) {
     return (
-      <Card className="w-full max-w-md">
-        <CardContent className="pt-6 text-center space-y-4">
-          <CheckCircle className="h-8 w-8 mx-auto text-green-500" />
-          <h2 className="text-2xl font-bold">Email Verified!</h2>
+      <Card className="w-full max-w-md shadow-lg transition-all duration-300">
+        <CardContent className="pt-6 text-center space-y-6">
+          <div className="relative">
+            <div className="absolute inset-0 bg-green-100 rounded-full scale-150 opacity-20" />
+            <CheckCircle className="h-12 w-12 mx-auto text-green-500 relative z-10" />
+          </div>
+          <h2 className="text-2xl font-bold text-green-700">Email Verified!</h2>
           <p className="text-muted-foreground max-w-sm mx-auto">
             Your email has been verified successfully. Redirecting you to the app...
           </p>
@@ -65,24 +60,45 @@ export function Verify({ email, setMode }: VerifyProps) {
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardContent className="pt-6 text-center space-y-4">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-        <h2 className="text-2xl font-bold">Check your email</h2>
-        <p className="text-muted-foreground max-w-sm mx-auto">
-          We sent you a verification link to {email}. Click the link in your email to verify your account.
-        </p>
-        <p className="text-sm text-muted-foreground">
-          This tab will automatically close once you verify your email in the new tab.
-        </p>
-        <Button 
-          variant="ghost" 
-          className="mt-4"
-          onClick={() => setMode('login')}
-        >
-          Back to login
-        </Button>
+    <Card className="w-full max-w-md shadow-lg transition-all duration-300 pt-1">
+      <CardContent className="pt-6 text-center space-y-6">
+        <div className="relative flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full scale-150 opacity-20" />
+          
+          {/* Outer rotating ring */}
+          <div className="absolute w-16 h-16 border-4 border-green-200 rounded-full animate-spin border-t-green-500" />
+          
+          {/* Inner rotating ring */}
+          <div className="absolute w-12 h-12 border-4 border-green-100 rounded-full animate-spin border-b-green-400" 
+               style={{ animationDirection: 'reverse', animationDuration: '3s' }} />
+          
+          {/* Mail icon */}
+          <Mail className="h-8 w-8 text-green-600 relative z-10" />
+          
+          {/* Pulsing background */}
+          <div className="absolute w-20 h-20 rounded-full animate-pulse opacity-30" />
+        </div>
+
+        <h2 className="text-2xl font-bold text-black">Check your email</h2>
+        <div className="space-y-3">
+          <p className="text-muted-foreground max-w-sm mx-auto">
+            We sent you a verification link to{' '}
+            <span className="font-medium text-green-600">{email}</span>
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Click the link in your email to verify your account.
+          </p>
+        </div>
+        <div className="pt-2">
+          <Button 
+            variant="default" 
+            className="bg-black hover:bg-black/90 text-white"
+            onClick={() => setMode('login')}
+          >
+            Back to login
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )
-} 
+}
