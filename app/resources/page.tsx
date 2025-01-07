@@ -537,6 +537,16 @@ export default function ResourcesPage() {
     }
   }
 
+  const getDefaultTenant = () => {
+    return tenants
+      .filter(t => t.is_owner)
+      .sort((a, b) => a.name.localeCompare(b.name))[0]?.id || 
+      tenants
+      .filter(t => t.is_admin)
+      .sort((a, b) => a.name.localeCompare(b.name))[0]?.id ||
+      tenants[0]?.id
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-b from-neutral-50 to-neutral-100">
       <main className="flex-1 p-6">
@@ -555,13 +565,17 @@ export default function ResourcesPage() {
                   <Library className="w-4 h-4 mr-2" />
                   Resource Library
                 </Button>
-                <Button variant="outline" onClick={() => setIsManageCategoriesOpen(true)} size="sm" className="h-9">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setManagingTenantId(getDefaultTenant())
+                    setIsManageCategoriesOpen(true)
+                  }} 
+                  size="sm" 
+                  className="h-9"
+                >
                   <Folder className="w-4 h-4 mr-2" />
                   Manage Categories
-                </Button>
-                <Button variant="outline" onClick={() => setIsAIDialogOpen(true)} size="sm" className="h-9">
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Add with AI
                 </Button>
                 <Button onClick={handleAddResourceClick} size="sm" className="h-9">
                   <Plus className="w-4 h-4 mr-2" />
@@ -582,17 +596,30 @@ export default function ResourcesPage() {
               </div>
               <div className="flex items-center space-x-2 justify-end">
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="bg-neutral-50 w-[200px]">
-                    <Folder className="w-4 h-4 mr-2 text-gray-400" />
-                    <SelectValue placeholder="All Categories" />
+                  <SelectTrigger className="bg-neutral-50 w-[200px] flex justify-between items-center">
+                    <div className="flex items-center">
+                      <Folder className="w-4 h-4 mr-2 text-gray-400" />
+                      <SelectValue placeholder="All Categories" />
+                    </div>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Categories</SelectItem>
-                    {categories.map(category => (
-                      <SelectItem key={category.id} value={category.id.toString()}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
+                    {categories
+                      .filter(category => {
+                        // Get resources for this category
+                        const categoryResources = resources.filter(resource => 
+                          resource.category_id === category.id && 
+                          (selectedTenant === 'all' || resource.tenant_id === selectedTenant)
+                        )
+                        // Only include categories that have resources
+                        return categoryResources.length > 0
+                      })
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(category => (
+                        <SelectItem key={category.id} value={category.id.toString()}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
                 <Select value={selectedTenant} onValueChange={setSelectedTenant}>
@@ -641,7 +668,7 @@ export default function ResourcesPage() {
                               </Avatar>
                               <span className="truncate">{tenant.name}</span>
                             </div>
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-4 flex-shrink-0">
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2 flex-shrink-0">
                               {tenant.is_owner && (
                                 <>
                                   <Crown className="w-3 h-3 text-yellow-500" />
@@ -703,81 +730,83 @@ export default function ResourcesPage() {
               </motion.div>
             ) : selectedCategory === 'all' ? (
               // Show all categories
-              categories.map(category => {
-                const categoryResources = filteredResources.filter(
-                  resource => resource.category_id === category.id
-                )
-                if (categoryResources.length === 0) return null
+              categories
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(category => {
+                  const categoryResources = filteredResources.filter(
+                    resource => resource.category_id === category.id
+                  )
+                  if (categoryResources.length === 0) return null
 
-                // Find the tenant for this category
-                const tenant = tenants.find(t => t.id === category.tenant_id)
+                  // Find the tenant for this category
+                  const tenant = tenants.find(t => t.id === category.tenant_id)
 
-                return (
-                  <motion.div
-                    key={category.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="space-y-4"
-                  >
-                    <div 
-                      className="flex items-center justify-between cursor-pointer group"
-                      onClick={() => {
-                        setEditingCategory(category);
-                        setIsEditCategoryDialogOpen(true);
-                      }}
+                  return (
+                    <motion.div
+                      key={category.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="space-y-4"
                     >
-                      <div className="flex items-center gap-3">
-                        {category.image_url ? (
-                          <img 
-                            src={category.image_url} 
-                            alt={category.name}
-                            className="w-6 h-6 object-cover rounded"
-                          />
-                        ) : (
-                          <Folder className="w-6 h-6 text-muted-foreground" />
-                        )}
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-lg font-semibold group-hover:text-primary transition-colors">
-                            {category.name}
-                          </h2>
-                          <span className="text-muted-foreground text-sm">•</span>
+                      <div 
+                        className="flex items-center justify-between cursor-pointer group"
+                        onClick={() => {
+                          setEditingCategory(category);
+                          setIsEditCategoryDialogOpen(true);
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          {category.image_url ? (
+                            <img 
+                              src={category.image_url} 
+                              alt={category.name}
+                              className="w-6 h-6 object-cover rounded"
+                            />
+                          ) : (
+                            <Folder className="w-6 h-6 text-muted-foreground" />
+                          )}
                           <div className="flex items-center gap-2">
-                            <Avatar className="h-5 w-5">
-                              <AvatarImage 
-                                src={tenant?.avatar_url || undefined}
-                                alt={tenant?.name}
-                              />
-                              <AvatarFallback>
-                                {tenant?.name.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm text-muted-foreground">{tenant?.name}</span>
+                            <h2 className="text-lg font-semibold group-hover:text-primary transition-colors">
+                              {category.name}
+                            </h2>
+                            <span className="text-muted-foreground text-sm">•</span>
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-5 w-5">
+                                <AvatarImage 
+                                  src={tenant?.avatar_url || undefined}
+                                  alt={tenant?.name}
+                                />
+                                <AvatarFallback>
+                                  {tenant?.name.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm text-muted-foreground">{tenant?.name}</span>
+                            </div>
                           </div>
+                          <Pencil className="w-4 h-4 opacity-0 group-hover:opacity-50" />
                         </div>
-                        <Pencil className="w-4 h-4 opacity-0 group-hover:opacity-50" />
                       </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {categoryResources.map((resource) => (
-                        <ResourceCard
-                          key={resource.id}
-                          resource={resource}
-                          onEdit={() => {
-                            setEditingResource(resource)
-                            setIsEditDialogOpen(true)
-                          }}
-                          onDelete={() => {
-                            setSelectedResource(resource)
-                            setIsDeleteDialogOpen(true)
-                          }}
-                          tenants={tenants}
-                        />
-                      ))}
-                    </div>
-                  </motion.div>
-                )
-              })
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {categoryResources.map((resource) => (
+                          <ResourceCard
+                            key={resource.id}
+                            resource={resource}
+                            onEdit={() => {
+                              setEditingResource(resource)
+                              setIsEditDialogOpen(true)
+                            }}
+                            onDelete={() => {
+                              setSelectedResource(resource)
+                              setIsDeleteDialogOpen(true)
+                            }}
+                            tenants={tenants}
+                          />
+                        ))}
+                      </div>
+                    </motion.div>
+                  )
+                })
             ) : (
               // Show selected category
               <motion.div
@@ -920,7 +949,7 @@ export default function ResourcesPage() {
                             </Avatar>
                             <span className="truncate">{tenant.name}</span>
                           </div>
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2 flex-shrink-0">
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-4 flex-shrink-0">
                             {tenant.is_owner && (
                               <>
                                 <Crown className="w-3 h-3 text-yellow-500" />
@@ -1379,22 +1408,48 @@ export default function ResourcesPage() {
                               {tenants.find(t => t.id === newResource.tenant_id)?.name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex items-center justify-between flex-1 min-w-0">
-                            <span className="truncate">{tenants.find(t => t.id === newResource.tenant_id)?.name}</span>
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
-                              {tenants.find(t => t.id === newResource.tenant_id)?.is_owner && (
+                          <span>{tenants.find(t => t.id === newResource.tenant_id)?.name}</span>
+                        </div>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenants
+                      .filter(tenant => canManageCategories(tenant.id))
+                      .sort((a, b) => {
+                        // Sort by role priority: owner > admin > member
+                        if (a.is_owner && !b.is_owner) return -1;
+                        if (!a.is_owner && b.is_owner) return 1;
+                        if (a.is_admin && !b.is_admin) return -1;
+                        if (!a.is_admin && b.is_admin) return 1;
+                        return a.name.localeCompare(b.name);
+                      })
+                      .map((tenant) => (
+                        <SelectItem key={tenant.id} value={tenant.id}>
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center space-x-2 flex-1 min-w-0">
+                              <Avatar className="h-5 w-5 flex-shrink-0">
+                                <AvatarImage src={tenant.avatar_url || undefined} />
+                                <AvatarFallback>
+                                  {tenant.name.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="truncate">{tenant.name}</span>
+                            </div>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2 flex-shrink-0">
+                              {tenant.is_owner && (
                                 <>
                                   <Crown className="w-3 h-3 text-yellow-500" />
                                   Owner
                                 </>
                               )}
-                              {tenants.find(t => t.id === newResource.tenant_id)?.is_admin && !tenants.find(t => t.id === newResource.tenant_id)?.is_owner && (
+                              {tenant.is_admin && !tenant.is_owner && (
                                 <>
                                   <Shield className="w-3 h-3 text-blue-500" />
                                   Admin
                                 </>
                               )}
-                              {!tenants.find(t => t.id === newResource.tenant_id)?.is_owner && !tenants.find(t => t.id === newResource.tenant_id)?.is_admin && (
+                              {!tenant.is_owner && !tenant.is_admin && (
                                 <>
                                   <User className="w-3 h-3" />
                                   Member
@@ -1402,46 +1457,8 @@ export default function ResourcesPage() {
                               )}
                             </span>
                           </div>
-                        </div>
-                      )}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tenants.map((tenant) => (
-                      <SelectItem key={tenant.id} value={tenant.id}>
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center space-x-2 flex-1 min-w-0">
-                            <Avatar className="h-5 w-5 flex-shrink-0">
-                              <AvatarImage src={tenant.avatar_url || undefined} />
-                              <AvatarFallback>
-                                {tenant.name.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="truncate">{tenant.name}</span>
-                          </div>
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-4 flex-shrink-0">
-                            {tenant.is_owner && (
-                              <>
-                                <Crown className="w-3 h-3 text-yellow-500" />
-                                Owner
-                              </>
-                            )}
-                            {tenant.is_admin && !tenant.is_owner && (
-                              <>
-                                <Shield className="w-3 h-3 text-blue-500" />
-                                Admin
-                              </>
-                            )}
-                            {!tenant.is_owner && !tenant.is_admin && (
-                              <>
-                                <User className="w-3 h-3" />
-                                Member
-                              </>
-                            )}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1655,7 +1672,12 @@ export default function ResourcesPage() {
       </Dialog>
 
       {/* Manage Categories Dialog */}
-      <Dialog open={isManageCategoriesOpen} onOpenChange={setIsManageCategoriesOpen}>
+      <Dialog open={isManageCategoriesOpen} onOpenChange={(open) => {
+        if (open) {
+          setManagingTenantId(getDefaultTenant())
+        }
+        setIsManageCategoriesOpen(open)
+      }}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Manage Categories</DialogTitle>
@@ -1668,22 +1690,44 @@ export default function ResourcesPage() {
             <div className="space-y-2">
               <Label>Organization</Label>
               <Select
-                value={managingTenantId}
+                value={managingTenantId || tenants.find(t => t.is_owner)?.id || ''}
                 onValueChange={setManagingTenantId}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select organization">
                     {managingTenantId && (
-                      <div className="flex items-center space-x-2">
-                        <Avatar className="h-5 w-5">
-                          <AvatarImage 
-                            src={tenants.find(t => t.id === managingTenantId)?.avatar_url || undefined}
-                          />
-                          <AvatarFallback>
-                            {tenants.find(t => t.id === managingTenantId)?.name.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span>{tenants.find(t => t.id === managingTenantId)?.name}</span>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage 
+                              src={tenants.find(t => t.id === managingTenantId)?.avatar_url || undefined}
+                            />
+                            <AvatarFallback>
+                              {tenants.find(t => t.id === managingTenantId)?.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{tenants.find(t => t.id === managingTenantId)?.name}</span>
+                        </div>
+                        <span className="flex items-center gap-1 text-xs ml-2 text-muted-foreground">
+                          {tenants.find(t => t.id === managingTenantId)?.is_owner && (
+                            <>
+                              <Crown className="w-3 h-3 text-yellow-500" />
+                              Owner
+                            </>
+                          )}
+                          {tenants.find(t => t.id === managingTenantId)?.is_admin && !tenants.find(t => t.id === managingTenantId)?.is_owner && (
+                            <>
+                              <Shield className="w-3 h-3 text-blue-500" />
+                              Admin
+                            </>
+                          )}
+                          {!tenants.find(t => t.id === managingTenantId)?.is_owner && !tenants.find(t => t.id === managingTenantId)?.is_admin && (
+                            <>
+                              <User className="w-3 h-3" />
+                              Member
+                            </>
+                          )}
+                        </span>
                       </div>
                     )}
                   </SelectValue>
@@ -1691,16 +1735,46 @@ export default function ResourcesPage() {
                 <SelectContent>
                   {tenants
                     .filter(tenant => canManageCategories(tenant.id))
+                    .sort((a, b) => {
+                      // Sort by role priority: owner > admin > member
+                      if (a.is_owner && !b.is_owner) return -1;
+                      if (!a.is_owner && b.is_owner) return 1;
+                      if (a.is_admin && !b.is_admin) return -1;
+                      if (!a.is_admin && b.is_admin) return 1;
+                      return a.name.localeCompare(b.name);
+                    })
                     .map((tenant) => (
                       <SelectItem key={tenant.id} value={tenant.id}>
-                        <div className="flex items-center space-x-2">
-                          <Avatar className="h-5 w-5">
-                            <AvatarImage src={tenant.avatar_url || undefined} />
-                            <AvatarFallback>
-                              {tenant.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span>{tenant.name}</span>
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center space-x-2 flex-1 min-w-0">
+                            <Avatar className="h-5 w-5 flex-shrink-0">
+                              <AvatarImage src={tenant.avatar_url || undefined} />
+                              <AvatarFallback>
+                                {tenant.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="truncate">{tenant.name}</span>
+                          </div>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-2 flex-shrink-0">
+                            {tenant.is_owner && (
+                              <>
+                                <Crown className="w-3 h-3 text-yellow-500" />
+                                Owner
+                              </>
+                            )}
+                            {tenant.is_admin && !tenant.is_owner && (
+                              <>
+                                <Shield className="w-3 h-3 text-blue-500" />
+                                Admin
+                              </>
+                            )}
+                            {!tenant.is_owner && !tenant.is_admin && (
+                              <>
+                                <User className="w-3 h-3" />
+                                Member
+                              </>
+                            )}
+                          </span>
                         </div>
                       </SelectItem>
                     ))}
@@ -1708,6 +1782,7 @@ export default function ResourcesPage() {
               </Select>
             </div>
 
+            {/* Rest of the manage categories dialog content... */}
             {managingTenantId && (
               <div className="border rounded-lg">
                 <div className="divide-y">
@@ -1754,6 +1829,19 @@ export default function ResourcesPage() {
                         </div>
                       )
                     })}
+                  {categories.filter(category => category.tenant_id === managingTenantId).length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+                      <div className="p-4 rounded-full bg-muted">
+                        <Folder className="w-8 h-8 text-muted-foreground" />
+                      </div>
+                      <div className="mt-4 space-y-2">
+                        <h3 className="font-medium">No categories yet</h3>
+                        <p className="text-sm text-muted-foreground max-w-sm">
+                          Categories will appear here once they are created when adding resources.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1931,7 +2019,7 @@ function ResourceCard({
                   {resource.title}
                 </h3>
                 {resource.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                  <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                     {resource.description}
                   </p>
                 )}

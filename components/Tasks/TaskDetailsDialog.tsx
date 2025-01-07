@@ -374,7 +374,7 @@ export function TaskDetailsDialog({ task, updateTask, addComment, children }: Ta
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
                 <DialogTitle className="text-xl font-bold">
-                  {task.title.slice(0, 30)}
+                  {task.title.slice(0, 100)}
                 </DialogTitle>
                 <div className="flex items-center space-x-2">
                   <Select

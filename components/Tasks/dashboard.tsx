@@ -297,18 +297,29 @@ export function DashboardComponent() {
     }
   }
 
-  const filteredTasks = sortTasks(tasks.filter(task => {
-    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         task.body.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesPriority = filterPriority === 'all' || task.priority === filterPriority
-    const matchesAssignee = filterAssignee === 'all' || task.assignee === filterAssignee
-    const matchesTenant = filterTenant === 'all' || task.tenant_id === filterTenant
-    const matchesArchiveStatus = task.archived === showArchived
+  // Apply filters and sorting
+  const filteredTasks = sortTasks(
+    tasks.filter(task => {
+      const matchesSearch =
+        task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        task.body.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesPriority = filterPriority === 'all' || task.priority === filterPriority
+      const matchesAssignee = filterAssignee === 'all' || task.assignee === filterAssignee
+      const matchesTenant = filterTenant === 'all' || task.tenant_id === filterTenant
+      const matchesArchiveStatus = task.archived === showArchived
 
-    return matchesSearch && matchesPriority && matchesAssignee && matchesTenant && matchesArchiveStatus
-  }))
+      return (
+        matchesSearch &&
+        matchesPriority &&
+        matchesAssignee &&
+        matchesTenant &&
+        matchesArchiveStatus
+      )
+    })
+  )
 
   const statusColumns = ['To Do', 'In Progress', 'Done']
+
   // First get unique assignee names, then map to objects with avatar URLs
   const uniqueAssignees = Array.from(new Set(tasks.map(task => task.assignee)))
     .map(assigneeName => {
@@ -332,10 +343,13 @@ export function DashboardComponent() {
         .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
 
       if (!error && userTenants) {
-        const roles = userTenants.reduce((acc, ut) => ({
-          ...acc,
-          [ut.tenant_id]: { is_owner: ut.is_owner, is_admin: ut.is_admin }
-        }), {} as Record<string, { is_owner: boolean; is_admin: boolean }>)
+        const roles = userTenants.reduce(
+          (acc, ut) => ({
+            ...acc,
+            [ut.tenant_id]: { is_owner: ut.is_owner, is_admin: ut.is_admin }
+          }),
+          {} as Record<string, { is_owner: boolean; is_admin: boolean }>
+        )
         setUserOrgRoles(roles)
       }
     }
@@ -347,21 +361,27 @@ export function DashboardComponent() {
     .map(tenantId => {
       const task = tasks.find(t => t.tenant_id === tenantId)
       const role = userOrgRoles[tenantId || '']
-      return task ? {
-        id: task.tenant_id,
-        name: task.tenant_name || 'Unknown Organization',
-        avatar_url: task.tenant_avatar_url || undefined,
-        is_owner: role?.is_owner || false,
-        is_admin: role?.is_admin || false
-      } : null
+      return task
+        ? {
+            id: task.tenant_id,
+            name: task.tenant_name || 'Unknown Organization',
+            avatar_url: task.tenant_avatar_url || undefined,
+            is_owner: role?.is_owner || false,
+            is_admin: role?.is_admin || false
+          }
+        : null
     })
-    .filter((tenant): tenant is { 
-      id: string; 
-      name: string; 
-      avatar_url: string | undefined;
-      is_owner: boolean;
-      is_admin: boolean;
-    } => Boolean(tenant))
+    .filter(
+      (
+        tenant
+      ): tenant is {
+        id: string
+        name: string
+        avatar_url: string | undefined
+        is_owner: boolean
+        is_admin: boolean
+      } => Boolean(tenant)
+    )
     .sort((a, b) => {
       // Sort by role priority: owner -> admin -> member
       if (a.is_owner !== b.is_owner) return a.is_owner ? -1 : 1
@@ -385,11 +405,15 @@ export function DashboardComponent() {
     }
   }
 
+  /**
+   * If `filteredTasks.length` is 0, the user sees "No tasks found" at the bottom.
+   * We also want columns to show "No tasks" only if the entire set is empty:
+   */
+  const isDashboardEmpty = filteredTasks.length === 0
+
+  // For the big "no tasks" message in the middle:
   const hasNoTasks = filteredTasks.length === 0
   const hasNoArchivedTasks = showArchived && filteredTasks.length === 0
-  const hasNoActiveTasks = !showArchived && statusColumns.every(status => 
-    filteredTasks.filter(task => task.status === status).length === 0
-  )
 
   return (
     <motion.main
@@ -404,12 +428,14 @@ export function DashboardComponent() {
               <h1 className="text-3xl font-bold tracking-tight">Task Dashboard</h1>
               <div className="text-sm text-muted-foreground flex items-center">
                 <Calendar className="w-4 h-4 mr-2" />
-                <span>{currentDate.toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}</span>
+                <span>
+                  {currentDate.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </span>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -441,7 +467,9 @@ export function DashboardComponent() {
                 disabled={isRefreshing}
                 className="h-9"
               >
-                <RefreshCcw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <RefreshCcw
+                  className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`}
+                />
                 Refresh
               </Button>
               <Button onClick={handleAddTaskClick} size="sm" className="h-9">
@@ -449,7 +477,10 @@ export function DashboardComponent() {
                 Add Task
               </Button>
 
-              <Dialog open={showAddTaskSuggestionDialog} onOpenChange={setShowAddTaskSuggestionDialog}>
+              <Dialog
+                open={showAddTaskSuggestionDialog}
+                onOpenChange={setShowAddTaskSuggestionDialog}
+              >
                 <DialogContent className="sm:max-w-[500px]">
                   <DialogHeader>
                     <div className="flex items-center gap-2">
@@ -457,7 +488,9 @@ export function DashboardComponent() {
                         <Sparkles className="w-8 h-8 text-primary" />
                       </div>
                       <div>
-                        <DialogTitle className="text-xl">Try AI-Assisted Creation?</DialogTitle>
+                        <DialogTitle className="text-xl">
+                          Try AI-Assisted Creation?
+                        </DialogTitle>
                         <DialogDescription className="text-base">
                           Let AI help you create tasks more efficiently
                         </DialogDescription>
@@ -514,8 +547,8 @@ export function DashboardComponent() {
                 </DialogContent>
               </Dialog>
 
-              <AddTaskDialog 
-                addTask={addTask} 
+              <AddTaskDialog
+                addTask={addTask}
                 openAIDirectly={false}
                 forceOpen={isAddingTask}
                 onOpenChange={(open) => {
@@ -526,8 +559,8 @@ export function DashboardComponent() {
                 <div className="hidden" />
               </AddTaskDialog>
 
-              <AddTaskDialog 
-                addTask={addTask} 
+              <AddTaskDialog
+                addTask={addTask}
                 openAIDirectly={true}
                 forceOpen={isAddingTaskWithAI}
                 onOpenChange={(open) => {
@@ -561,16 +594,20 @@ export function DashboardComponent() {
                       ) : (
                         <div className="flex items-center space-x-2">
                           <Avatar className="h-5 w-5">
-                            <AvatarImage 
+                            <AvatarImage
                               src={uniqueTenants.find(t => t.id === filterTenant)?.avatar_url}
                             />
                             <AvatarFallback>
-                              {(uniqueTenants.find(t => t.id === filterTenant)?.name || '??').slice(0, 2).toUpperCase()}
+                              {(uniqueTenants.find(t => t.id === filterTenant)?.name ||
+                                '??'
+                              ).slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex items-center gap-2">
                             {(() => {
-                              const tenant = uniqueTenants.find(t => t.id === filterTenant)
+                              const tenant = uniqueTenants.find(
+                                t => t.id === filterTenant
+                              )
                               return (
                                 <>
                                   <span className="truncate">
@@ -624,7 +661,9 @@ export function DashboardComponent() {
                 <Select value={filterPriority} onValueChange={setFilterPriority}>
                   <SelectTrigger className="bg-neutral-50">
                     <SelectValue>
-                      {filterPriority === 'all' ? 'All Priorities' : filterPriority}
+                      {filterPriority === 'all'
+                        ? 'All Priorities'
+                        : filterPriority}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
@@ -642,8 +681,11 @@ export function DashboardComponent() {
                       ) : (
                         <div className="flex items-center space-x-2">
                           <Avatar className="h-5 w-5">
-                            <AvatarImage 
-                              src={uniqueAssignees.find(a => a.name === filterAssignee)?.avatar_url ?? undefined}
+                            <AvatarImage
+                              src={
+                                uniqueAssignees.find(a => a.name === filterAssignee)
+                                  ?.avatar_url ?? undefined
+                              }
                             />
                             <AvatarFallback>
                               {filterAssignee.slice(0, 2).toUpperCase()}
@@ -660,7 +702,9 @@ export function DashboardComponent() {
                       <SelectItem key={assignee.name} value={assignee.name}>
                         <div className="flex items-center space-x-2">
                           <Avatar className="h-5 w-5">
-                            <AvatarImage src={assignee.avatar_url ?? undefined} />
+                            <AvatarImage
+                              src={assignee.avatar_url ?? undefined}
+                            />
                             <AvatarFallback>
                               {assignee.name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
@@ -681,9 +725,9 @@ export function DashboardComponent() {
               <Badge variant="outline">{filteredTasks.length} matches</Badge>
             </div>
             <div className="min-w-[100px] flex justify-end">
-              {(filterPriority !== 'all' || 
-                filterAssignee !== 'all' || 
-                filterTenant !== 'all' || 
+              {(filterPriority !== 'all' ||
+                filterAssignee !== 'all' ||
+                filterTenant !== 'all' ||
                 searchQuery) ? (
                 <Button
                   variant="secondary"
@@ -735,7 +779,10 @@ export function DashboardComponent() {
                 <p className="text-sm text-muted-foreground max-w-sm">
                   {hasNoArchivedTasks
                     ? "There are no tasks in the archive. Archived tasks will appear here."
-                    : searchQuery || filterPriority !== 'all' || filterAssignee !== 'all' || filterTenant !== 'all'
+                    : searchQuery ||
+                      filterPriority !== 'all' ||
+                      filterAssignee !== 'all' ||
+                      filterTenant !== 'all'
                     ? "Try adjusting your filters or search query to find what you're looking for."
                     : "Get started by creating your first task using the 'Add Task' button above."}
                 </p>
@@ -749,7 +796,11 @@ export function DashboardComponent() {
               className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6"
             >
               {filteredTasks
-                .sort((a, b) => new Date(b.due || b.created_at).getTime() - new Date(a.due || a.created_at).getTime())
+                .sort(
+                  (a, b) =>
+                    new Date(b.due || b.created_at).getTime() -
+                    new Date(a.due || a.created_at).getTime()
+                )
                 .map((task) => (
                   <ArchivedTaskCard
                     key={task.id}
@@ -777,6 +828,11 @@ export function DashboardComponent() {
                   addComment={addComment}
                   deleteTask={deleteTask}
                   toggleArchive={toggleArchive}
+                  /**
+                   * Pass this so columns only display "No tasks" 
+                   * if the entire board is empty
+                   */
+                  isDashboardEmpty={isDashboardEmpty}
                 />
               ))}
             </motion.div>

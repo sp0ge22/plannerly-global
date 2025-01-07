@@ -231,7 +231,7 @@ export function TaskCard({
           >
             <div className="cursor-pointer">
               <h3 className="font-semibold mb-2">
-                {task.title.slice(0, 30)}
+                {task.title.slice(0, 50)}
               </h3>
               <div className="flex flex-col space-y-2 mb-3">
                 <div className="flex items-center justify-between text-sm text-gray-600">
