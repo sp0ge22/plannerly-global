@@ -23,28 +23,8 @@ export default function Home() {
         <Card className="container mx-auto p-6 shadow-lg">
           <Hero />
         </Card>
-        <ChevronButton onClick={() => scrollToSection(featuresRef)} />
       </section>
 
-      <section ref={featuresRef} className="relative h-screen w-full flex flex-col justify-center items-center px-4">
-        <Card className="container mx-auto p-6 shadow-lg">
-          <Features />
-        </Card>
-        <ChevronButton onClick={() => scrollToSection(expandableRef)} />
-      </section>
-
-      <section ref={expandableRef} className="relative h-screen w-full flex flex-col justify-center items-center px-4">
-        <Card className="container mx-auto p-6 shadow-lg">
-          <Expandable />
-        </Card>
-        <ChevronButton onClick={() => scrollToSection(pricingRef)} />
-      </section>
-
-      <section ref={pricingRef} className="relative h-screen w-full flex flex-col justify-center items-center px-4">
-        <Card className="container mx-auto p-6 shadow-lg">
-          <Pricing />
-        </Card>
-      </section>
     </main>
   )
 }
