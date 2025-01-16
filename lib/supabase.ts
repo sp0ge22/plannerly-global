@@ -15,7 +15,32 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce'
+    flowType: 'pkce',
+    storage: {
+      getItem: (key) => {
+        try {
+          const value = localStorage.getItem(key)
+          return value ? JSON.parse(value) : null
+        } catch (error) {
+          console.error('Error reading from storage:', error)
+          return null
+        }
+      },
+      setItem: (key, value) => {
+        try {
+          localStorage.setItem(key, JSON.stringify(value))
+        } catch (error) {
+          console.error('Error writing to storage:', error)
+        }
+      },
+      removeItem: (key) => {
+        try {
+          localStorage.removeItem(key)
+        } catch (error) {
+          console.error('Error removing from storage:', error)
+        }
+      }
+    }
   }
 })
 
